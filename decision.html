@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<link rel="icon" type="image/png" href="favicon.png">
+<title>Decision Layer — INVASCAPE</title>
+<link rel="stylesheet" href="theme.css">
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="team-auth.js"></script>
+<style>
+  .caveat{
+    font-size:12.5px; line-height:1.5; color:var(--ink-dim);
+    background:var(--card-hi); border-left:3px solid var(--amber);
+    padding:10px 12px; border-radius:0 8px 8px 0; margin-bottom:10px;
+  }
+  .threshold-row{display:flex; gap:10px; flex-wrap:wrap; align-items:end; margin-bottom:6px;}
+  .threshold-field{display:flex; flex-direction:column; gap:4px; min-width:150px;}
+  table.decision{width:100%; border-collapse:collapse; font-size:12.5px; margin-top:10px;}
+  table.decision th, table.decision td{border:1px solid var(--line); padding:7px 8px; text-align:left; vertical-align:top;}
+  table.decision th{background:var(--card-hi); color:var(--ink-dim); font-weight:700; font-size:11px; text-transform:uppercase; letter-spacing:.04em;}
+  .plot-id-cell{font-weight:700;}
+  .remediation-cell{max-width:260px; font-size:12px; line-height:1.4;}
+  .species-pill{display:inline-block; background:var(--card-hi); border:1px solid var(--line); border-radius:10px; padding:2px 8px; font-size:11px; margin:1px 2px 1px 0;}
+  .no-data-row td{color:var(--ink-dim); font-style:italic;}
+  .import-status{font-size:12px; color:var(--ink-dim); margin-top:6px;}
+  .summary-strip{display:flex; gap:10px; flex-wrap:wrap; margin-bottom:4px;}
+  .summary-chip{flex:1; min-width:100px; background:var(--card-hi); border-radius:8px; padding:8px 10px; text-align:center;}
+  .summary-chip .n{font-size:18px; font-weight:800;}
+  .summary-chip .l{font-size:10px; color:var(--ink-dim); text-transform:uppercase; letter-spacing:.05em; margin-top:2px;}
+</style>
+</head>
+<body>
+<script>document.documentElement.dataset.theme = localStorage.getItem('flora-theme') || 'dark';</script>
+
+<nav class="topnav">
+  <a class="brand" href="index.html"><img src="logo.png" alt="INVASCAPE" class="brand-mark"> INVASCAPE</a>
+  <div class="nav-links">
+    <a href="index.html">Home</a>
+    <a href="phytoscout.html">PhytoScout</a>
+    <a href="habitat-scorer.html">Habitat Scorer</a>
+    <a href="decision.html" class="active">Decision Layer</a>
+  </div>
+  <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">🌙</button>
+</nav>
+
+<header class="page-header">
+  <h1>Decision Layer</h1>
+  <div class="sub">Priority tiers &amp; remediation guidance, joined by Plot ID</div>
+</header>
+
+<main>
+
+  <div id="teamAuthContainer"></div>
+  <div id="decisionContent" style="display:none;">
+
+  <div class="card">
+    <div class="caveat">
+      This layer combines habitat condition, field-recorded infestation, and your GEE predictors (dist_road, dist_cropland) into a priority tier per plot. These predictors are used here as <strong>observed habitat-association flags</strong> — the strongest and most coherent variables in your SDM — not as predicted invasion probabilities, since current SDM performance is near-chance at this sample size. Treat tiers as decision support, not automated determinations.
+    </div>
+    <div class="summary-strip" id="summaryStrip"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Spatial Predictors</div>
+    <div class="helptext" style="margin-bottom:8px;">
+      dist_road and dist_cropland values are matched automatically to each plot's GPS point against a predictor grid exported once from GEE (see PREDICTOR_GRID_SETUP.md). No manual import needed for normal use.
+    </div>
+    <div class="import-status" id="importStatus">Loading predictor grid…</div>
+    <details style="margin-top:10px;">
+      <summary style="cursor:pointer; font-size:12.5px; color:var(--ink-dim);">Advanced: override with a manual CSV (plotId, dist_road_m, dist_cropland_m)</summary>
+      <div class="field-row" style="margin-top:8px;">
+        <div class="field">
+          <input type="file" id="predictorFile" accept=".csv">
+        </div>
+        <button class="btn btn-ghost" id="clearPredictors">Clear manual override</button>
+      </div>
+    </details>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Rule Thresholds (adjustable)</div>
+    <div class="threshold-row">
+      <div class="threshold-field">
+        <label for="densityThreshold">High-infestation density cutoff (individuals/m²)</label>
+        <input type="number" id="densityThreshold" value="1" min="0" step="0.1">
+      </div>
+      <div class="threshold-field">
+        <label for="proximityThreshold">"Near road/cropland" distance cutoff (m)</label>
+        <input type="number" id="proximityThreshold" value="200" min="0" step="10">
+      </div>
+    </div>
+    <div class="helptext">Adjust these and the table below recomputes immediately — no redeploy needed. Defaults are starting points, not literature-derived cutoffs; tune them once you have enough plots to see where your own data naturally separates.</div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Plot Priority &amp; Remediation</div>
+    <div style="overflow-x:auto;">
+      <table class="decision" id="decisionTable"></table>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Remediation Knowledge Base (reference)</div>
+    <div id="knowledgeBase"></div>
+  </div>
+
+  </div>
+</main>
+
+<footer class="site-footer">Ecosynthra Lab · Decision Support</footer>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const TARGET_SPECIES = ["Mimosa pudica","Mimosa pigra","Mimosa diplotricha","Chromolaena odorata"];
+
+// ---- Literature-grounded remediation knowledge base (Nigeria / West Africa focused where available) ----
+const REMEDIATION = {
+  "Chromolaena odorata": {
+    summary: "The most studied target species in Nigeria, present across over 20 states. Biological control agents (Pareuchaetes pseudoinsulata, Cecidochares connexa) have been trialled nationally but establishment has historically been inconsistent; mechanical and chemical control alone have not sustainably controlled it.",
+    immediate: "Manual slashing/uprooting before flowering to prevent seed-set, prioritising satellite patches over already-dense stands. Where communities value it for soil fertility, favour selective removal at forest/farm margins over blanket eradication, and coordinate with any regional biocontrol programme before introducing agents locally.",
+    monitor: "Repeat survey at 3–6 month intervals to catch early spread, especially along field margins and disturbed patches.",
+    routine: "No action needed; periodic resurvey is sufficient."
+  },
+  "Mimosa diplotricha": {
+    summary: "Widely distributed across southern Nigeria's lowland forest and derived savanna zones, and a documented cassava/cropland pest. Hand-pulling or hoeing before seed-set is reported as highly effective in Nigerian farming practice; fire tends to stimulate rather than suppress germination.",
+    immediate: "Hand-pull or hoe out young plants before flowering, especially in cropland-adjacent plots; consider ploughing in as green manure pre-flowering. Avoid burning as a control method — it increases germination. Pre/post-emergence herbicide can support integrated management on larger infestations.",
+    monitor: "Check cropland-margin and roadside plots each season, since this species tracks agricultural disturbance closely.",
+    routine: "No action needed; periodic resurvey is sufficient."
+  },
+  "Mimosa pigra": {
+    summary: "A floodplain/wetland specialist that forms dense monospecific stands once established, extremely difficult to remove at scale. Global literature is unanimous that early detection before stands mature is the single highest-leverage intervention.",
+    immediate: "Treat as highest urgency regardless of current stand size — this species goes from minor to unmanageable fastest. Mechanical cutting must go at least 10cm below ground level or it will resprout; combine with herbicide (cut-stump, basal-bark, or foliar) and consider fire where appropriate for larger stands. Prioritise floodplain, streamside, and seasonally-wet plots.",
+    monitor: "Check all riparian/floodplain plots at least twice yearly — this is the species where a 'wait and see' approach carries the highest long-term cost.",
+    routine: "No action needed; periodic resurvey is sufficient, but keep riparian zones on a shorter monitoring cycle regardless of tier."
+  },
+  "Mimosa pudica": {
+    summary: "A widespread low-growing groundcover species; management literature is comparatively sparse, reflecting its generally lower ecological impact relative to the other three targets.",
+    immediate: "Manual removal is usually sufficient even where dense; not typically a priority for chemical or biological control.",
+    monitor: "Include in routine survey rounds; escalate only if forming dense mats that exclude native ground-layer species.",
+    routine: "No action needed; periodic resurvey is sufficient."
+  }
+};
+
+// ---- Local storage readers (per-device fallback / offline cache) ----
+function getEcoLog(){ try{ return JSON.parse(localStorage.getItem('ecoplotscribeLog')) || []; }catch(e){ return []; } }
+function getHabitatLog(){ try{ return JSON.parse(localStorage.getItem('habitatScorerLog')) || []; }catch(e){ return []; } }
+function getPredictors(){ try{ return JSON.parse(localStorage.getItem('floraPredictors')) || {}; }catch(e){ return {}; } }
+function setPredictors(obj){ localStorage.setItem('floraPredictors', JSON.stringify(obj)); }
+
+let predictorGrid = null; // [{lat,lng,dist_road_m,dist_cropland_m}, ...] loaded from predictor-grid.csv
+let teamSignedIn = false;
+let remoteEco = {};      // plotId -> entry, pulled from Firebase (team-wide)
+let remoteHabitat = {};  // plotId -> entry, pulled from Firebase (team-wide)
+
+function distMeters(lat1,lng1,lat2,lng2){
+  const R = 6371000;
+  const dLat = (lat2-lat1) * Math.PI/180;
+  const dLng = (lng2-lng1) * Math.PI/180;
+  const meanLat = (lat1+lat2)/2 * Math.PI/180;
+  const x = dLng * Math.cos(meanLat);
+  return R * Math.sqrt(dLat*dLat + x*x);
+}
+
+function nearestGridPoint(lat, lng){
+  if(!predictorGrid || predictorGrid.length === 0) return null;
+  let best = null, bestDist = Infinity;
+  predictorGrid.forEach(p => {
+    const d = distMeters(lat, lng, p.lat, p.lng);
+    if(d < bestDist){ bestDist = d; best = p; }
+  });
+  return best ? {...best, matchDistanceM: Math.round(bestDist)} : null;
+}
+
+async function loadPredictorGrid(){
+  try{
+    const res = await fetch('predictor-grid.csv', {cache:'no-store'});
+    if(!res.ok) throw new Error('not found');
+    const text = await res.text();
+    const lines = text.trim().split(/\r?\n/);
+    const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+    const latIdx = headers.findIndex(h => h.includes('lat'));
+    const lngIdx = headers.findIndex(h => h.includes('lng') || h.includes('lon'));
+    const roadIdx = headers.findIndex(h => h.includes('road'));
+    const cropIdx = headers.findIndex(h => h.includes('crop'));
+    const grid = [];
+    for(let i=1;i<lines.length;i++){
+      if(!lines[i].trim()) continue;
+      const cols = lines[i].split(',');
+      grid.push({
+        lat: parseFloat(cols[latIdx]),
+        lng: parseFloat(cols[lngIdx]),
+        dist_road_m: roadIdx>=0 ? parseFloat(cols[roadIdx]) : undefined,
+        dist_cropland_m: cropIdx>=0 ? parseFloat(cols[cropIdx]) : undefined
+      });
+    }
+    predictorGrid = grid;
+    document.getElementById('importStatus').textContent = `Predictor grid loaded — ${grid.length} points (predictor-grid.csv)`;
+  }catch(err){
+    predictorGrid = null;
+    document.getElementById('importStatus').textContent = 'No predictor-grid.csv found in this folder — spatial predictors will show as unmatched until it\'s added. See PREDICTOR_GRID_SETUP.md.';
+  }
+}
+
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 1800);
+}
+
+// latest entry per plotId from a log array — used for local fallback data
+function latestByPlot(log){
+  const map = {};
+  log.forEach(e => { if(e.plotId) map[e.plotId] = e; });
+  return map;
+}
+
+function computeTargetDensity(ecoEntry){
+  if(!ecoEntry || !ecoEntry.quadrats) return {present:false, density:0, species:[]};
+  const targetSpecies = new Set();
+  let targetCount = 0;
+  ecoEntry.quadrats.forEach(q => {
+    q.species.forEach(s => {
+      if(TARGET_SPECIES.includes(s.name)){
+        targetSpecies.add(s.name);
+        targetCount += parseFloat(s.count) || 0;
+      }
+    });
+  });
+  const totalArea = (ecoEntry.quadratAreaM2 || 0) * (ecoEntry.quadratCount || ecoEntry.quadrats.length || 0);
+  const density = totalArea > 0 ? targetCount/totalArea : 0;
+  return {present: targetSpecies.size > 0, density, species:[...targetSpecies]};
+}
+
+function computeTier(habitatClass, infestLevel, proximity){
+  if(infestLevel === 'high') return 'priority';
+  if(infestLevel === 'low' && proximity === 'near' && habitatClass === 'Degraded') return 'priority';
+  if(infestLevel === 'low') return 'monitor';
+  if(infestLevel === 'none' && proximity === 'near') return 'monitor';
+  return 'routine';
+}
+
+function tierBadge(tier){
+  if(tier==='priority') return '<span class="tier-badge tier-priority">Priority — Immediate</span>';
+  if(tier==='monitor') return '<span class="tier-badge tier-monitor">Monitor &amp; schedule</span>';
+  return '<span class="tier-badge tier-routine">Routine monitoring</span>';
+}
+
+function renderKnowledgeBase(){
+  const kb = document.getElementById('knowledgeBase');
+  kb.innerHTML = Object.entries(REMEDIATION).map(([sp, r]) => `
+    <div style="margin-bottom:12px; padding-bottom:12px; border-bottom:1px solid var(--line);">
+      <div style="font-weight:800; font-style:italic; margin-bottom:4px;">${sp}</div>
+      <div class="helptext" style="margin-bottom:6px;">${r.summary}</div>
+      <div style="font-size:12.5px;"><strong>If priority:</strong> ${r.immediate}</div>
+    </div>
+  `).join('');
+}
+
+// merge Firebase (team-wide) with local (offline cache / not-yet-synced) — local fills gaps, Firebase wins on overlap
+function mergedLog(remote, local){
+  const map = {...latestByPlot(local)};
+  Object.entries(remote).forEach(([plotId, entry]) => { map[plotId] = entry; });
+  return map;
+}
+
+function render(){
+  const ecoLatest = mergedLog(remoteEco, getEcoLog());
+  const habitatLatest = mergedLog(remoteHabitat, getHabitatLog());
+  const densityThreshold = parseFloat(document.getElementById('densityThreshold').value) || 1;
+  const proximityThreshold = parseFloat(document.getElementById('proximityThreshold').value) || 200;
+
+  const allPlotIds = [...new Set([...Object.keys(ecoLatest), ...Object.keys(habitatLatest)])].sort();
+
+  let priorityCount=0, monitorCount=0, routineCount=0;
+
+  const table = document.getElementById('decisionTable');
+  if(allPlotIds.length === 0){
+    table.innerHTML = `<tr><td class="no-data-row">No plots yet. Save a plot in PhytoScout and/or Habitat Scorer to see it here.</td></tr>`;
+    document.getElementById('summaryStrip').innerHTML = '';
+    return;
+  }
+
+  const header = `<tr>
+    <th>Plot ID</th><th>Habitat</th><th>Target species</th><th>Density (ind/m²)</th>
+    <th>dist_road (m)</th><th>dist_cropland (m)</th><th>Priority tier</th><th>Remediation</th>
+  </tr>`;
+
+  const rows = allPlotIds.map(plotId => {
+    const eco = ecoLatest[plotId];
+    const hab = habitatLatest[plotId];
+    const habitatClass = hab ? (hab.complete ? hab.classification : `${hab.classification} (provisional)`) : 'No score yet';
+    const habitatKey = hab ? hab.classification : 'Unknown';
+
+    const infest = computeTargetDensity(eco);
+    const infestLevel = !infest.present ? 'none' : (infest.density >= densityThreshold ? 'high' : 'low');
+
+    const plotLat = parseFloat((eco && eco.lat) || (hab && hab.lat));
+    const plotLng = parseFloat((eco && eco.lng) || (hab && hab.lng));
+
+    const manualOverrides = getPredictors();
+    let pred = null, matchNote = '';
+    if(manualOverrides[plotId]){
+      pred = manualOverrides[plotId];
+      matchNote = 'manual override';
+    } else if(!isNaN(plotLat) && !isNaN(plotLng)){
+      const nearest = nearestGridPoint(plotLat, plotLng);
+      if(nearest){ pred = nearest; matchNote = `${nearest.matchDistanceM}m from grid point`; }
+    }
+
+    let proximity = 'unknown', roadStr = '—', cropStr = '—';
+    if(pred){
+      roadStr = pred.dist_road_m !== undefined ? `${Math.round(pred.dist_road_m)} <span class="helptext">(${matchNote})</span>` : '—';
+      cropStr = pred.dist_cropland_m !== undefined ? Math.round(pred.dist_cropland_m) : '—';
+      const roadNear = pred.dist_road_m !== undefined && pred.dist_road_m <= proximityThreshold;
+      const cropNear = pred.dist_cropland_m !== undefined && pred.dist_cropland_m <= proximityThreshold;
+      proximity = (roadNear || cropNear) ? 'near' : 'far';
+    } else if(isNaN(plotLat) || isNaN(plotLng)){
+      roadStr = '<span class="helptext">no GPS on plot</span>'; cropStr = '';
+    } else {
+      roadStr = '<span class="helptext">no grid loaded</span>'; cropStr = '';
+    }
+
+    const tier = computeTier(habitatKey, infestLevel, proximity);
+    if(tier==='priority') priorityCount++; else if(tier==='monitor') monitorCount++; else routineCount++;
+
+    let remediationText = '—';
+    if(infest.species.length > 0){
+      const sp = infest.species[0];
+      const r = REMEDIATION[sp];
+      remediationText = tier==='priority' ? r.immediate : (tier==='monitor' ? r.monitor : r.routine);
+    } else {
+      remediationText = 'No target species recorded — routine resurvey only.';
+    }
+
+    return `<tr>
+      <td class="plot-id-cell">${plotId}</td>
+      <td>${habitatClass}</td>
+      <td>${infest.species.length ? infest.species.map(s=>`<span class="species-pill"><i>${s}</i></span>`).join('') : '<span class="species-pill">none</span>'}</td>
+      <td>${infest.density ? infest.density.toFixed(2) : '0.00'}</td>
+      <td>${roadStr}</td>
+      <td>${cropStr}</td>
+      <td>${tierBadge(tier)}</td>
+      <td class="remediation-cell">${remediationText}</td>
+    </tr>`;
+  }).join('');
+
+  table.innerHTML = header + rows;
+
+  document.getElementById('summaryStrip').innerHTML = `
+    <div class="summary-chip"><div class="n">${allPlotIds.length}</div><div class="l">Plots tracked</div></div>
+    <div class="summary-chip"><div class="n">${priorityCount}</div><div class="l">Priority</div></div>
+    <div class="summary-chip"><div class="n">${monitorCount}</div><div class="l">Monitor</div></div>
+    <div class="summary-chip"><div class="n">${routineCount}</div><div class="l">Routine</div></div>
+  `;
+}
+
+// ---- CSV import (manual override) ----
+function parseCsv(text){
+  const lines = text.trim().split(/\r?\n/);
+  const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+  const idIdx = headers.findIndex(h => h.includes('plot'));
+  const roadIdx = headers.findIndex(h => h.includes('road'));
+  const cropIdx = headers.findIndex(h => h.includes('crop'));
+  const result = {};
+  for(let i=1;i<lines.length;i++){
+    if(!lines[i].trim()) continue;
+    const cols = lines[i].split(',').map(c => c.trim());
+    const plotId = cols[idIdx];
+    if(!plotId) continue;
+    result[plotId] = {
+      dist_road_m: roadIdx>=0 ? parseFloat(cols[roadIdx]) : undefined,
+      dist_cropland_m: cropIdx>=0 ? parseFloat(cols[cropIdx]) : undefined
+    };
+  }
+  return result;
+}
+
+document.getElementById('predictorFile').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    try{
+      const parsed = parseCsv(ev.target.result);
+      const count = Object.keys(parsed).length;
+      if(count === 0){ showToast('No valid rows found — check column headers'); return; }
+      setPredictors(parsed);
+      showToast(`${count} manual override(s) applied`);
+      render();
+    }catch(err){
+      showToast('Could not parse CSV — check the file format');
+    }
+  };
+  reader.readAsText(file);
+});
+
+document.getElementById('clearPredictors').addEventListener('click', () => {
+  localStorage.removeItem('floraPredictors');
+  showToast('Manual overrides cleared — using auto-matched grid values again');
+  render();
+});
+
+document.getElementById('densityThreshold').addEventListener('input', render);
+document.getElementById('proximityThreshold').addEventListener('input', render);
+
+// ---- Firebase: pull team-wide data once signed in ----
+function loadRemoteData(){
+  if(typeof fbDb === 'undefined') return;
+  fbDb.ref('ecoplotscribe').once('value').then(snap => { remoteEco = snap.val() || {}; render(); });
+  fbDb.ref('habitatScorer').once('value').then(snap => { remoteHabitat = snap.val() || {}; render(); });
+}
+
+// theme toggle
+function paintToggle(){
+  document.getElementById('themeToggle').textContent = document.documentElement.dataset.theme === 'light' ? '☀️' : '🌙';
+}
+document.getElementById('themeToggle').addEventListener('click', () => {
+  const next = document.documentElement.dataset.theme === 'light' ? 'dark' : 'light';
+  document.documentElement.dataset.theme = next;
+  localStorage.setItem('flora-theme', next);
+  paintToggle();
+});
+paintToggle();
+
+// init
+renderKnowledgeBase();
+loadPredictorGrid().then(render);
+initTeamAuth('teamAuthContainer', (signedIn) => {
+  teamSignedIn = signedIn;
+  document.getElementById('decisionContent').style.display = signedIn ? 'block' : 'none';
+  if(signedIn) loadRemoteData();
+});
+</script>
+
+</body>
+</html>

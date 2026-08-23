@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<link rel="icon" type="image/png" href="favicon.png">
+<title>PhytoScout — INVASCAPE</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
+<script src="firebase-config.js"></script>
+<link rel="stylesheet" href="theme.css">
+<style>
+  .custom-size-row{display:none; gap:10px; margin-top:8px;}
+  .custom-size-row.show{display:flex;}
+
+  .species-tag-row{display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;}
+
+  .quadrat-block{border:1px solid var(--line); border-radius:8px; padding:12px; margin-bottom:10px; background:var(--card-hi);}
+  .quadrat-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;}
+  .quadrat-name{font-weight:800; font-size:14px;}
+  .species-row{
+    display:grid; grid-template-columns:1fr 70px 70px; gap:6px; margin-bottom:6px; align-items:start;
+  }
+  .species-row select, .species-row input{font-size:13px; padding:7px 8px;}
+  .species-other{margin-top:6px;}
+  .species-entry{border-top:1px solid var(--line); padding-top:8px; margin-top:8px;}
+  .species-entry:first-child{border-top:none; padding-top:0; margin-top:0;}
+  .rm-species{color:#E06556; background:none; border:none; font-size:12px; cursor:pointer; padding:4px 0;}
+
+  .save-row{display:flex; gap:8px; margin-top:4px;}
+  .save-row .btn{flex:1;}
+  .logged-item{display:flex; justify-content:space-between; align-items:center; padding:9px 0; border-top:1px solid var(--line); font-size:13px;}
+  .logged-item:first-child{border-top:none;}
+  .logged-plot{font-weight:700;}
+  .logged-meta{color:var(--ink-dim); font-size:11.5px;}
+  .export-row{display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;}
+  .export-row .btn{flex:1; min-width:100px;}
+  .clear-btn{width:100%; margin-top:8px;}
+  .infest-flag{font-size:12px; margin-top:6px; padding:6px 8px; border-radius:6px;}
+  .infest-yes{background:rgba(192,57,43,.15); color:#E06556; border:1px solid rgba(192,57,43,.3);}
+  .infest-no{background:rgba(63,163,77,.15); color:#6FCB7F; border:1px solid rgba(63,163,77,.3);}
+</style>
+</head>
+<body>
+<script>document.documentElement.dataset.theme = localStorage.getItem('flora-theme') || 'dark';</script>
+
+<nav class="topnav">
+  <a class="brand" href="index.html"><img src="logo.png" alt="INVASCAPE" class="brand-mark"> INVASCAPE</a>
+  <div class="nav-links">
+    <a href="index.html">Home</a>
+    <a href="phytoscout.html" class="active">PhytoScout</a>
+    <a href="habitat-scorer.html">Habitat Scorer</a>
+    <a href="decision.html">Decision Layer</a>
+  </div>
+  <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">🌙</button>
+</nav>
+
+<header class="page-header">
+  <h1>PhytoScout</h1>
+  <div class="sub">Plot survey — species presence, community composition &amp; diversity</div>
+</header>
+
+<main>
+
+  <!-- PLOT IDENTIFICATION -->
+  <div class="card">
+    <div class="card-title">Plot Identification</div>
+    <div class="field-row">
+      <div class="field">
+        <label for="plotId">Plot ID</label>
+        <input type="text" id="plotId" placeholder="e.g. AWK-001">
+      </div>
+      <div class="field">
+        <label for="recorder">Recorded by</label>
+        <input type="text" id="recorder" placeholder="Your name">
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label for="institution">Institution / Group (optional)</label>
+        <input type="text" id="institution" placeholder="e.g. UNIZIK GEO 244, or leave blank">
+      </div>
+      <div class="field">
+        <label for="fdate">Date</label>
+        <input type="date" id="fdate">
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label for="state">State</label>
+        <select id="state">
+          <option value="">— select —</option>
+          <option>Abia</option>
+          <option>Anambra</option>
+          <option>Ebonyi</option>
+          <option>Enugu</option>
+          <option>Imo</option>
+          <option>Outside Southeast Nigeria</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="lga">LGA</label>
+        <select id="lga">
+          <option value="">— select a state first —</option>
+        </select>
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label for="locality">Locality / Landmark</label>
+        <input type="text" id="locality" placeholder="e.g. near UNIZIK second gate">
+      </div>
+    </div>
+    <label>Location (captured once for this plot)</label>
+    <div class="gps-row">
+      <button class="btn" id="gpsBtn">📍 Capture GPS</button>
+      <span class="gps-status" id="gpsStatus">No coordinates captured</span>
+    </div>
+    <div class="field-row" style="margin-top:8px;">
+      <div class="field"><label for="lat">Latitude</label><input type="text" id="lat" placeholder="manual entry"></div>
+      <div class="field"><label for="lng">Longitude</label><input type="text" id="lng" placeholder="manual entry"></div>
+    </div>
+  </div>
+
+  <!-- ZONE & ROLE -->
+  <div class="card">
+    <div class="card-title">Zone &amp; Role</div>
+    <div class="field-row">
+      <div class="field">
+        <label>Disturbance zone</label>
+        <div class="radio-group" id="zoneGroup">
+          <div class="radio-pill" data-val="Secondary forest">Secondary forest</div>
+          <div class="radio-pill" data-val="Medium">Medium</div>
+          <div class="radio-pill" data-val="High">High</div>
+        </div>
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Role</label>
+        <div class="radio-group" id="roleGroup">
+          <div class="radio-pill" data-val="Impact">Impact</div>
+          <div class="radio-pill" data-val="Local control">Local control</div>
+          <div class="radio-pill" data-val="Reference control">Reference control</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SAMPLING DESIGN -->
+  <div class="card">
+    <div class="card-title">Sampling Design</div>
+    <div class="field-row">
+      <div class="field">
+        <label for="vegType">Vegetation type</label>
+        <select id="vegType">
+          <option value="">— select —</option>
+          <option>Grassland / herb layer</option><option>Shrubland / thicket</option>
+          <option>Forest understorey</option><option>Forest overstorey</option>
+          <option>Farmland margin</option><option>Disturbed / riparian</option><option>Other</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="samplingMethod">Sampling method</label>
+        <select id="samplingMethod">
+          <option value="">— select —</option>
+          <option>Random</option><option>Systematic</option>
+          <option>Stratified random</option><option>Subjective / Relevé</option>
+        </select>
+      </div>
+    </div>
+    <label>Quadrat size</label>
+    <div class="radio-group" id="sizeGroup">
+      <div class="radio-pill" data-val="1x1" data-area="1">1 m × 1 m</div>
+      <div class="radio-pill" data-val="2x2" data-area="4">2 m × 2 m</div>
+      <div class="radio-pill" data-val="5x5" data-area="25">5 m × 5 m</div>
+      <div class="radio-pill" data-val="10x10" data-area="100">10 m × 10 m</div>
+      <div class="radio-pill" data-val="custom" data-area="0">Custom size</div>
+    </div>
+    <div class="custom-size-row" id="customSizeRow">
+      <div class="field"><label for="customL">Length (m)</label><input type="number" id="customL" min="0" step="0.1"></div>
+      <div class="field"><label for="customW">Width (m)</label><input type="number" id="customW" min="0" step="0.1"></div>
+      <div class="field"><label>Area (m²)</label><input type="text" id="customArea" readonly></div>
+    </div>
+  </div>
+
+  <!-- QUADRATS -->
+  <div class="card">
+    <div class="card-title">
+      <span>Species Data Entry — Per Quadrat</span>
+      <button class="btn btn-sm" id="addQuadratBtn">+ Add Quadrat</button>
+    </div>
+    <div class="helptext">
+      Record species exactly as identified. For target invasive species, select from the list — classification tags will appear. For any other species (native or unidentified), choose "Other" and type the name (use <i>sp. indet. 1</i>, <i>sp. indet. 2</i> etc. for unresolved IDs). DAFOR: D = Dominant, A = Abundant, F = Frequent, O = Occasional, R = Rare.
+    </div>
+    <div id="quadratsContainer" style="margin-top:10px;"></div>
+  </div>
+
+  <!-- LIVE SUMMARY -->
+  <div class="card">
+    <div class="card-title">Live Plot Summary</div>
+    <div class="stat-grid">
+      <div class="stat-box"><div class="stat-val" id="statS">0</div><div class="stat-label">Total species (S)</div></div>
+      <div class="stat-box"><div class="stat-val" id="statQ">0</div><div class="stat-label">Quadrats</div></div>
+      <div class="stat-box"><div class="stat-val" id="statN">0</div><div class="stat-label">Individuals</div></div>
+      <div class="stat-box"><div class="stat-val" id="statH">—</div><div class="stat-label">Shannon H'</div></div>
+      <div class="stat-box"><div class="stat-val" id="statJ">—</div><div class="stat-label">Evenness J'</div></div>
+      <div class="stat-box"><div class="stat-val" id="statFreq" style="font-size:13px;">—</div><div class="stat-label">Most frequent</div></div>
+    </div>
+    <div id="infestFlag"></div>
+    <table class="matrix" id="matrixTable" style="display:none;"></table>
+  </div>
+
+  <!-- SAVE -->
+  <div class="card">
+    <div class="card-title">Save Plot</div>
+    <div class="save-row">
+      <button class="btn" id="savePlotBtn">Save plot to today's log</button>
+      <button class="btn btn-ghost" id="resetFormBtn">Clear form</button>
+    </div>
+  </div>
+
+  <!-- LOG -->
+  <div class="card">
+    <div class="card-title">Logged Today <span id="loggedCount">0</span></div>
+    <div id="loggedList"><div class="empty-note">No plots logged yet — save your first plot above.</div></div>
+    <div class="export-row">
+      <button class="btn btn-outline" id="exportExcel">Export Excel</button>
+      <button class="btn btn-outline" id="exportJson">Export JSON</button>
+      <button class="btn btn-outline" id="exportCsv">Export CSV</button>
+    </div>
+    <button class="btn btn-danger clear-btn" id="clearAll">Clear all logged data</button>
+  </div>
+
+</main>
+
+<footer class="site-footer">Ecosynthra Lab · Field Tool</footer>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const TARGET_SPECIES = ["Mimosa pudica","Mimosa pigra","Mimosa diplotricha","Chromolaena odorata"];
+const CLASS_TAGS = ["Dense mat / thicket","Scattered individuals","Seedlings / juveniles","Flowering","Fruiting / seeding","Climbing / twining","Monoculture stand","Mixed with natives"];
+const DAFOR = ["D","A","F","O","R"];
+
+const SE_LGAS = {
+  "Abia": ["Aba North","Aba South","Arochukwu","Bende","Ikwuano","Isiala Ngwa North","Isiala Ngwa South","Isuikwuato","Obi Ngwa","Ohafia","Osisioma","Ugwunagbo","Ukwa East","Ukwa West","Umuahia North","Umuahia South","Umu Nneochi"],
+  "Anambra": ["Aguata","Anambra East","Anambra West","Anaocha","Awka North","Awka South","Ayamelum","Dunukofia","Ekwusigo","Idemili North","Idemili South","Ihiala","Njikoka","Nnewi North","Nnewi South","Ogbaru","Onitsha North","Onitsha South","Orumba North","Orumba South","Oyi"],
+  "Ebonyi": ["Abakaliki","Afikpo North","Afikpo South","Ebonyi","Ezza North","Ezza South","Ikwo","Ishielu","Ivo","Izzi","Ohaozara","Ohaukwu","Onicha"],
+  "Enugu": ["Aninri","Awgu","Enugu East","Enugu North","Enugu South","Ezeagu","Igbo Etiti","Igbo Eze North","Igbo Eze South","Isi Uzo","Nkanu East","Nkanu West","Nsukka","Oji River","Udenu","Udi","Uzo Uwani"],
+  "Imo": ["Aboh Mbaise","Ahiazu Mbaise","Ehime Mbano","Ezinihitte","Ideato North","Ideato South","Ihitte Uboma","Ikeduru","Isiala Mbano","Isu","Mbaitoli","Ngor Okpala","Njaba","Nkwerre","Nwangele","Obowo","Oguta","Ohaji Egbema","Okigwe","Onuimo","Orlu","Orsu","Oru East","Oru West","Owerri Municipal","Owerri North","Owerri West"]
+};
+
+document.getElementById('state').addEventListener('change', (e) => {
+  const lgaSelect = document.getElementById('lga');
+  const state = e.target.value;
+  const lgas = SE_LGAS[state];
+  if(!lgas){
+    lgaSelect.innerHTML = state === 'Outside Southeast Nigeria'
+      ? '<option value="">n/a — outside SE Nigeria</option>'
+      : '<option value="">— select a state first —</option>';
+    return;
+  }
+  lgaSelect.innerHTML = '<option value="">— select —</option>' + lgas.map(l => `<option>${l}</option>`).join('');
+});
+
+let zone = null, role = null, sizeMode = "1x1", sizeArea = 1;
+let quadrats = []; // {name, species:[{name,isTarget,dafor,count,tags:[]}]}
+let qCounter = 0;
+
+// ---- radio pill groups ----
+function wirePillGroup(groupEl, onSelect){
+  groupEl.querySelectorAll('.radio-pill').forEach(p => {
+    p.addEventListener('click', () => {
+      groupEl.querySelectorAll('.radio-pill').forEach(x => x.classList.remove('active'));
+      p.classList.add('active');
+      onSelect(p.dataset.val, p.dataset.area);
+    });
+  });
+}
+wirePillGroup(document.getElementById('zoneGroup'), v => zone = v);
+wirePillGroup(document.getElementById('roleGroup'), v => role = v);
+wirePillGroup(document.getElementById('sizeGroup'), (v,a) => {
+  sizeMode = v;
+  const customRow = document.getElementById('customSizeRow');
+  if(v === 'custom'){
+    customRow.classList.add('show');
+    recalcCustomArea();
+  } else {
+    customRow.classList.remove('show');
+    sizeArea = parseFloat(a);
+  }
+});
+function recalcCustomArea(){
+  const l = parseFloat(document.getElementById('customL').value) || 0;
+  const w = parseFloat(document.getElementById('customW').value) || 0;
+  sizeArea = Math.round(l*w*100)/100;
+  document.getElementById('customArea').value = sizeArea ? sizeArea + ' m²' : '';
+}
+document.getElementById('customL').addEventListener('input', recalcCustomArea);
+document.getElementById('customW').addEventListener('input', recalcCustomArea);
+
+// ---- GPS ----
+document.getElementById('gpsBtn').addEventListener('click', () => {
+  const status = document.getElementById('gpsStatus');
+  if(!navigator.geolocation){ status.textContent = 'Geolocation not supported on this device'; return; }
+  status.textContent = 'Capturing…';
+  navigator.geolocation.getCurrentPosition(pos => {
+    document.getElementById('lat').value = pos.coords.latitude.toFixed(6);
+    document.getElementById('lng').value = pos.coords.longitude.toFixed(6);
+    status.textContent = `Captured ± ${Math.round(pos.coords.accuracy)}m`;
+  }, () => { status.textContent = 'Could not capture — enter manually'; }, {enableHighAccuracy:true, timeout:10000});
+});
+
+// ---- Quadrats ----
+function addQuadrat(){
+  qCounter++;
+  const q = {id:qCounter, name:`Q${qCounter}`, species:[]};
+  quadrats.push(q);
+  renderQuadrats();
+}
+document.getElementById('addQuadratBtn').addEventListener('click', addQuadrat);
+
+function speciesRowHtml(qid, sIdx, sp){
+  const isTargetSelected = TARGET_SPECIES.includes(sp.name);
+  return `
+    <div class="species-entry" data-q="${qid}" data-s="${sIdx}">
+      <div class="species-row">
+        <select class="sp-select">
+          <option value="">— select species —</option>
+          ${TARGET_SPECIES.map(t => `<option value="${t}" ${sp.name===t?'selected':''}><i>${t}</i></option>`).join('')}
+          <option value="__other__" ${sp.name && !isTargetSelected ? 'selected':''}>Other (type below)</option>
+        </select>
+        <select class="sp-dafor">
+          ${DAFOR.map(d => `<option ${sp.dafor===d?'selected':''}>${d}</option>`).join('')}
+        </select>
+        <input type="number" class="sp-count" min="0" placeholder="count" value="${sp.count||''}">
+      </div>
+      ${(!isTargetSelected) ? `<input type="text" class="species-other sp-othername" placeholder="Species name (e.g. Panicum maximum, or sp. indet. 1)" value="${sp.name && !isTargetSelected ? sp.name : ''}">` : ''}
+      ${isTargetSelected ? `<div class="species-tag-row">${CLASS_TAGS.map(t => `<div class="tag-chip ${sp.tags && sp.tags.includes(t)?'active':''}" data-tag="${t}">${t}</div>`).join('')}</div>` : ''}
+      <button type="button" class="rm-species">Remove species</button>
+    </div>
+  `;
+}
+
+function renderQuadrats(){
+  const container = document.getElementById('quadratsContainer');
+  container.innerHTML = quadrats.map(q => `
+    <div class="quadrat-block" data-qid="${q.id}">
+      <div class="quadrat-head">
+        <div class="quadrat-name">${q.name}</div>
+        <div>
+          <button type="button" class="btn btn-sm btn-outline add-sp-btn" data-qid="${q.id}">+ Species</button>
+          <button type="button" class="btn btn-sm btn-danger rm-quadrat-btn" data-qid="${q.id}">Remove</button>
+        </div>
+      </div>
+      <div class="sp-list" data-qid="${q.id}">
+        ${q.species.map((sp,i) => speciesRowHtml(q.id, i, sp)).join('') || '<div class="helptext">No species added yet.</div>'}
+      </div>
+    </div>
+  `).join('');
+
+  container.querySelectorAll('.add-sp-btn').forEach(b => b.addEventListener('click', () => {
+    const q = quadrats.find(x => x.id == b.dataset.qid);
+    q.species.push({name:'', dafor:'F', count:'', tags:[]});
+    renderQuadrats();
+    updateSummary();
+  }));
+  container.querySelectorAll('.rm-quadrat-btn').forEach(b => b.addEventListener('click', () => {
+    quadrats = quadrats.filter(x => x.id != b.dataset.qid);
+    renderQuadrats(); updateSummary();
+  }));
+  container.querySelectorAll('.quadrat-block').forEach(block => {
+    const qid = block.dataset.qid;
+    const q = quadrats.find(x => x.id == qid);
+    block.querySelectorAll('.species-entry').forEach(entry => {
+      const sIdx = parseInt(entry.dataset.s,10);
+      const sp = q.species[sIdx];
+      entry.querySelector('.sp-select').addEventListener('change', e => {
+        sp.name = e.target.value === '__other__' ? '' : e.target.value;
+        renderQuadrats(); updateSummary();
+      });
+      const otherInput = entry.querySelector('.sp-othername');
+      if(otherInput) otherInput.addEventListener('input', e => { sp.name = e.target.value; updateSummary(); });
+      entry.querySelector('.sp-dafor').addEventListener('change', e => { sp.dafor = e.target.value; });
+      entry.querySelector('.sp-count').addEventListener('input', e => { sp.count = e.target.value; updateSummary(); });
+      entry.querySelectorAll('.tag-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+          sp.tags = sp.tags || [];
+          const t = chip.dataset.tag;
+          if(sp.tags.includes(t)) sp.tags = sp.tags.filter(x=>x!==t);
+          else sp.tags.push(t);
+          chip.classList.toggle('active');
+        });
+      });
+      entry.querySelector('.rm-species').addEventListener('click', () => {
+        q.species.splice(sIdx,1);
+        renderQuadrats(); updateSummary();
+      });
+    });
+  });
+}
+
+// ---- Live summary ----
+function updateSummary(){
+  const allEntries = quadrats.flatMap(q => q.species.filter(s => s.name));
+  const speciesSet = [...new Set(allEntries.map(s => s.name))];
+  const totalN = allEntries.reduce((sum,s) => sum + (parseFloat(s.count)||0), 0);
+
+  document.getElementById('statS').textContent = speciesSet.length;
+  document.getElementById('statQ').textContent = quadrats.length;
+  document.getElementById('statN').textContent = totalN;
+
+  // Shannon H' and evenness, based on individual counts (falls back to frequency if no counts entered)
+  let H = '—', J = '—';
+  if(speciesSet.length > 0){
+    const useCounts = totalN > 0;
+    const props = speciesSet.map(name => {
+      if(useCounts){
+        const n = allEntries.filter(s=>s.name===name).reduce((sum,s)=>sum+(parseFloat(s.count)||0),0);
+        return n/totalN;
+      } else {
+        const occ = quadrats.filter(q => q.species.some(s=>s.name===name)).length;
+        return occ/quadrats.length;
+      }
+    }).filter(p => p>0);
+    const Hval = -props.reduce((sum,p) => sum + p*Math.log(p), 0);
+    H = Hval.toFixed(3);
+    J = speciesSet.length > 1 ? (Hval/Math.log(speciesSet.length)).toFixed(3) : '1.000';
+  }
+  document.getElementById('statH').textContent = H;
+  document.getElementById('statJ').textContent = J;
+
+  // most frequent (by quadrat occurrence)
+  let mostFreq = '—';
+  if(speciesSet.length > 0 && quadrats.length > 0){
+    let best = null, bestCount = -1;
+    speciesSet.forEach(name => {
+      const occ = quadrats.filter(q => q.species.some(s=>s.name===name)).length;
+      if(occ > bestCount){ bestCount = occ; best = name; }
+    });
+    mostFreq = best;
+  }
+  document.getElementById('statFreq').innerHTML = mostFreq !== '—' ? `<i>${mostFreq}</i>` : '—';
+
+  // infestation flag — based on target species presence/density
+  const targetEntries = allEntries.filter(s => TARGET_SPECIES.includes(s.name));
+  const flagEl = document.getElementById('infestFlag');
+  if(targetEntries.length === 0){
+    flagEl.innerHTML = `<div class="infest-flag infest-no">No target invasive species recorded in this plot.</div>`;
+  } else {
+    const targetN = targetEntries.reduce((sum,s)=>sum+(parseFloat(s.count)||0),0);
+    const areaSum = sizeArea * quadrats.length;
+    const density = areaSum > 0 && targetN > 0 ? (targetN/areaSum).toFixed(2) : null;
+    const names = [...new Set(targetEntries.map(s=>s.name))];
+    flagEl.innerHTML = `<div class="infest-flag infest-yes">Target species present: ${names.map(n=>`<i>${n}</i>`).join(', ')}${density ? ` — approx. ${density} individuals/m²` : ''}</div>`;
+  }
+
+  // matrix
+  const matrixTable = document.getElementById('matrixTable');
+  if(speciesSet.length === 0 || quadrats.length === 0){
+    matrixTable.style.display = 'none';
+  } else {
+    matrixTable.style.display = 'table';
+    let html = '<tr><th>Species</th>' + quadrats.map(q=>`<th>${q.name}</th>`).join('') + '</tr>';
+    speciesSet.forEach(name => {
+      html += `<tr><td>${name}</td>` + quadrats.map(q => {
+        const s = q.species.find(x=>x.name===name);
+        return `<td>${s ? s.dafor : '–'}</td>`;
+      }).join('') + '</tr>';
+    });
+    matrixTable.innerHTML = html;
+  }
+}
+
+// ---- Storage ----
+const STORAGE_KEY = 'ecoplotscribeLog';
+function getLog(){ try{ return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; }catch(e){ return []; } }
+function setLog(log){ localStorage.setItem(STORAGE_KEY, JSON.stringify(log)); }
+
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 1800);
+}
+
+function renderLog(){
+  const log = getLog();
+  document.getElementById('loggedCount').textContent = log.length;
+  const list = document.getElementById('loggedList');
+  if(log.length === 0){
+    list.innerHTML = '<div class="empty-note">No plots logged yet — save your first plot above.</div>';
+    return;
+  }
+  list.innerHTML = log.slice().reverse().map(e => `
+    <div class="logged-item">
+      <div>
+        <div class="logged-plot">${e.plotId || '(no ID)'} — ${e.totalSpecies} spp, ${e.quadratCount} quadrats <span class="helptext">${e.synced ? '☁️ synced' : '⏳ pending sync'}</span></div>
+        <div class="logged-meta">${e.zone||''} / ${e.role||''} · ${e.lga||''}${e.state?', '+e.state:''} · ${e.hasTargetSpecies?'target spp present':'no target spp'} · ${e.date||''}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+document.getElementById('savePlotBtn').addEventListener('click', () => {
+  const plotId = document.getElementById('plotId').value.trim();
+  if(!plotId){ showToast('Enter a Plot ID before saving'); return; }
+  if(quadrats.length === 0){ showToast('Add at least one quadrat first'); return; }
+
+  const allEntries = quadrats.flatMap(q => q.species.filter(s=>s.name));
+  const speciesSet = [...new Set(allEntries.map(s=>s.name))];
+  const targetEntries = allEntries.filter(s => TARGET_SPECIES.includes(s.name));
+
+  const entry = {
+    plotId,
+    recorder: document.getElementById('recorder').value.trim(),
+    institution: document.getElementById('institution').value.trim(),
+    date: document.getElementById('fdate').value,
+    lga: document.getElementById('lga').value,
+    state: document.getElementById('state').value,
+    locality: document.getElementById('locality').value.trim(),
+    lat: document.getElementById('lat').value,
+    lng: document.getElementById('lng').value,
+    zone, role,
+    vegType: document.getElementById('vegType').value,
+    samplingMethod: document.getElementById('samplingMethod').value,
+    quadratSize: sizeMode === 'custom' ? `${document.getElementById('customL').value}x${document.getElementById('customW').value}m custom` : sizeMode,
+    quadratAreaM2: sizeArea,
+    quadratCount: quadrats.length,
+    totalAreaM2: Math.round(sizeArea*quadrats.length*100)/100,
+    totalSpecies: speciesSet.length,
+    totalIndividuals: allEntries.reduce((s,x)=>s+(parseFloat(x.count)||0),0),
+    hasTargetSpecies: targetEntries.length > 0,
+    targetSpeciesPresent: [...new Set(targetEntries.map(s=>s.name))],
+    shannonH: document.getElementById('statH').textContent,
+    evennessJ: document.getElementById('statJ').textContent,
+    quadrats: JSON.parse(JSON.stringify(quadrats)),
+    savedAt: new Date().toISOString()
+  };
+  const log = getLog();
+  log.push(entry);
+  setLog(log);
+  renderLog();
+  showToast('Plot saved to today\'s log');
+  syncPlotToFirebase(entry);
+});
+
+function syncPlotToFirebase(entry){
+  if(typeof fbDb === 'undefined'){ return; }
+  fbDb.ref('ecoplotscribe/' + entry.plotId).set(entry)
+    .then(() => markSyncStatus(entry.plotId, true))
+    .catch(() => markSyncStatus(entry.plotId, false));
+}
+function markSyncStatus(plotId, ok){
+  const log = getLog();
+  const idx = log.findIndex(e => e.plotId === plotId);
+  if(idx >= 0){ log[idx].synced = ok; setLog(log); renderLog(); }
+}
+function retryPendingSyncs(){
+  if(typeof fbDb === 'undefined') return;
+  getLog().filter(e => !e.synced).forEach(syncPlotToFirebase);
+}
+window.addEventListener('online', retryPendingSyncs);
+
+document.getElementById('resetFormBtn').addEventListener('click', () => {
+  ['plotId','recorder','institution','lat','lng','locality'].forEach(id => document.getElementById(id).value='');
+  document.getElementById('lga').innerHTML = '<option value="">— select a state first —</option>';
+  document.getElementById('state').value = '';
+  document.getElementById('vegType').value = '';
+  document.getElementById('samplingMethod').value = '';
+  document.getElementById('gpsStatus').textContent = 'No coordinates captured';
+  document.querySelectorAll('.radio-pill').forEach(p => p.classList.remove('active'));
+  document.getElementById('customSizeRow').classList.remove('show');
+  zone = null; role = null; sizeMode = '1x1'; sizeArea = 1; quadrats = []; qCounter = 0;
+  renderQuadrats(); updateSummary();
+});
+
+// ---- Exports ----
+document.getElementById('exportJson').addEventListener('click', () => {
+  const log = getLog();
+  if(log.length===0){ showToast('No data to export'); return; }
+  downloadBlob(new Blob([JSON.stringify(log,null,2)],{type:'application/json'}), `ecoplotscribe_${dateStamp()}.json`);
+});
+
+document.getElementById('exportCsv').addEventListener('click', () => {
+  const log = getLog();
+  if(log.length===0){ showToast('No data to export'); return; }
+  const header = ['plotId','recorder','institution','date','state','lga','locality','lat','lng','zone','role','vegType','samplingMethod','quadratSize','quadratAreaM2','quadratCount','totalAreaM2','totalSpecies','totalIndividuals','hasTargetSpecies','targetSpeciesPresent','shannonH','evennessJ','savedAt'];
+  const rows = log.map(e => header.map(h => Array.isArray(e[h]) ? e[h].join(';') : e[h]));
+  const csv = [header.join(','), ...rows.map(r=>r.map(csvEscape).join(','))].join('\n');
+  downloadBlob(new Blob([csv],{type:'text/csv'}), `ecoplotscribe_${dateStamp()}.csv`);
+});
+
+document.getElementById('exportExcel').addEventListener('click', () => {
+  const log = getLog();
+  if(log.length===0){ showToast('No data to export'); return; }
+  if(typeof XLSX === 'undefined'){ showToast('Excel library unavailable — use CSV/JSON export'); return; }
+
+  const wb = XLSX.utils.book_new();
+
+  // Sheet 1: Plot-level summary
+  const summaryHeader = ['plotId','recorder','institution','date','state','lga','locality','lat','lng','zone','role','vegType','samplingMethod','quadratSize','quadratAreaM2','quadratCount','totalAreaM2','totalSpecies','totalIndividuals','hasTargetSpecies','targetSpeciesPresent','shannonH','evennessJ','savedAt'];
+  const summaryRows = log.map(e => summaryHeader.map(h => Array.isArray(e[h]) ? e[h].join('; ') : e[h]));
+  const wsSummary = XLSX.utils.aoa_to_sheet([summaryHeader, ...summaryRows]);
+  XLSX.utils.book_append_sheet(wb, wsSummary, 'Plot Summary');
+
+  // Sheet 2: raw species x quadrat records, one row per species-in-quadrat
+  const rawHeader = ['plotId','quadrat','species','isTarget','dafor','count','classificationTags'];
+  const rawRows = [];
+  log.forEach(e => {
+    e.quadrats.forEach(q => {
+      q.species.forEach(s => {
+        if(!s.name) return;
+        rawRows.push([e.plotId, q.name, s.name, TARGET_SPECIES.includes(s.name), s.dafor, s.count, (s.tags||[]).join('; ')]);
+      });
+    });
+  });
+  const wsRaw = XLSX.utils.aoa_to_sheet([rawHeader, ...rawRows]);
+  XLSX.utils.book_append_sheet(wb, wsRaw, 'Raw Records');
+
+  XLSX.writeFile(wb, `ecoplotscribe_${dateStamp()}.xlsx`);
+});
+
+function csvEscape(v){
+  const s = String(v ?? '');
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s;
+}
+function dateStamp(){ return new Date().toISOString().slice(0,10); }
+function downloadBlob(blob, filename){
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+document.getElementById('clearAll').addEventListener('click', () => {
+  if(confirm('Clear all logged plots? This cannot be undone.')){
+    localStorage.removeItem(STORAGE_KEY);
+    renderLog();
+    showToast('Logged data cleared');
+  }
+});
+
+// theme toggle
+function paintToggle(){
+  document.getElementById('themeToggle').textContent = document.documentElement.dataset.theme === 'light' ? '☀️' : '🌙';
+}
+document.getElementById('themeToggle').addEventListener('click', () => {
+  const next = document.documentElement.dataset.theme === 'light' ? 'dark' : 'light';
+  document.documentElement.dataset.theme = next;
+  localStorage.setItem('flora-theme', next);
+  paintToggle();
+});
+paintToggle();
+
+// init
+document.querySelector('#sizeGroup .radio-pill[data-val="1x1"]').classList.add('active');
+document.getElementById('fdate').valueAsDate = new Date();
+renderQuadrats();
+updateSummary();
+renderLog();
+addQuadrat();
+setTimeout(retryPendingSyncs, 1200);
+</script>
+
+</body>
+</html>

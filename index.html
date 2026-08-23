@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<link rel="icon" type="image/png" href="favicon.png">
+<title>INVASCAPE — Ecosynthra Lab</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  .hero{
+    position:relative;
+    padding:56px 16px 32px;
+    background-image: linear-gradient(180deg, rgba(12,16,12,0.25) 0%, rgba(12,16,12,0.88) 100%), url('hero-invasion.jpg');
+    background-size:cover;
+    background-position:center 35%;
+    color:#F5F3EC;
+  }
+  .hero .eyebrow{color:var(--amber);}
+  .hero h1{font-size:30px; margin:0 0 8px; color:#FFFFFF;}
+  .hero p{color:rgba(245,243,236,0.88); font-size:14px; line-height:1.5; max-width:520px;}
+  .field-strip{
+    display:flex; gap:12px; align-items:center;
+    background:var(--card); border:1px solid var(--line); border-radius:12px;
+    padding:10px; margin:14px 14px 0;
+  }
+  .field-strip img{width:76px; height:76px; object-fit:cover; border-radius:8px; flex-shrink:0;}
+  .field-strip-text{font-size:12px; color:var(--ink-dim); line-height:1.4;}
+  .field-strip-text strong{color:var(--ink); display:block; font-size:13px; margin-bottom:2px;}
+  .tool-card{
+    display:block; text-decoration:none; color:inherit;
+    background:var(--card); border:1px solid var(--line); border-radius:12px;
+    padding:16px; margin-bottom:12px;
+  }
+  .tool-card:hover{border-color:var(--amber);}
+  .tool-eyebrow{font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--amber); font-weight:700;}
+  .tool-name{font-size:18px; font-weight:800; margin:4px 0 4px;}
+  .tool-desc{font-size:13px; color:var(--ink-dim); line-height:1.4;}
+  .step-num{
+    display:inline-flex; align-items:center; justify-content:center;
+    width:22px; height:22px; border-radius:50%; background:var(--card-hi);
+    color:var(--amber); font-weight:800; font-size:12px; margin-right:8px; flex-shrink:0;
+  }
+  .step-row{display:flex; align-items:flex-start; margin-bottom:2px;}
+</style>
+</head>
+<body>
+<script>document.documentElement.dataset.theme = localStorage.getItem('flora-theme') || 'dark';</script>
+
+<nav class="topnav">
+  <a class="brand" href="index.html"><img src="logo.png" alt="INVASCAPE" class="brand-mark"> INVASCAPE</a>
+  <div class="nav-links">
+    <a href="index.html" class="active">Home</a>
+    <a href="phytoscout.html">PhytoScout</a>
+    <a href="habitat-scorer.html">Habitat Scorer</a>
+    <a href="decision.html">Decision Layer</a>
+  </div>
+  <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">🌙</button>
+</nav>
+
+<div class="hero">
+  <h1>INVASCAPE</h1>
+  <p>A field-to-decision pipeline for invasive alien plant species management: one Plot ID, one GPS capture, three connected tools — from data collection through to priority tiers and remediation guidance.</p>
+</div>
+
+<div class="field-strip">
+  <img src="accent-diplotricha.jpg" alt="Mimosa diplotricha field photo">
+  <div class="field-strip-text">
+    <strong><em>Mimosa diplotricha</em></strong>
+    Groundcover stand documented during ongoing Southeast Nigeria IAPS field surveys.
+  </div>
+</div>
+
+<div class="field-strip">
+  <img src="accent-chromolaena.jpg" alt="Chromolaena odorata field photo">
+  <div class="field-strip-text">
+    <strong><em>Chromolaena odorata</em></strong>
+    New growth documented during ongoing Southeast Nigeria IAPS field surveys.
+  </div>
+</div>
+
+<div class="field-strip">
+  <img src="accent-pudica.jpg" alt="Mimosa pudica field photo">
+  <div class="field-strip-text">
+    <strong><em>Mimosa pudica</em></strong>
+    Foliage documented during ongoing Southeast Nigeria IAPS field surveys.
+  </div>
+</div>
+
+<main>
+  <a class="tool-card" href="phytoscout.html">
+    <div class="tool-eyebrow">Step 1 · Data Collection</div>
+    <div class="tool-name">PhytoScout</div>
+    <div class="tool-desc">Plot ID, GPS, zone/role, and species/quadrat survey with DAFOR abundance and live diversity indices. Open to field workers and the general public.</div>
+  </a>
+  <a class="tool-card" href="habitat-scorer.html">
+    <div class="tool-eyebrow">Step 2 · Condition Assessment</div>
+    <div class="tool-name">Habitat Scorer</div>
+    <div class="tool-desc">11-criterion habitat condition scoring tied to the same Plot ID, with live mean score and pristine/degraded classification.</div>
+  </a>
+  <a class="tool-card" href="decision.html">
+    <div class="tool-eyebrow">Step 3 · Decision Support</div>
+    <div class="tool-name">Decision Layer</div>
+    <div class="tool-desc">Joins habitat condition, infestation density, and GEE spatial predictors into a priority tier per plot, with species-specific remediation guidance grounded in Nigeria-focused literature.</div>
+  </a>
+
+  <div class="card" style="margin-top:16px;">
+    <div class="card-title">How data flows</div>
+    <div class="step-row"><span class="step-num">1</span> Capture a plot in PhytoScout — Plot ID and GPS are set once.</div>
+    <div class="step-row"><span class="step-num">2</span> Score the same plot's condition in Habitat Scorer, using the same Plot ID.</div>
+    <div class="step-row"><span class="step-num">3</span> Open the Decision Layer to see both joined automatically, plus optionally import GEE predictor values, and get a priority tier + remediation note per plot.</div>
+  </div>
+</main>
+
+<footer class="site-footer">Ecosynthra Lab</footer>
+
+<script>
+function paintToggle(){
+  document.getElementById('themeToggle').textContent = document.documentElement.dataset.theme === 'light' ? '☀️' : '🌙';
+}
+document.getElementById('themeToggle').addEventListener('click', () => {
+  const next = document.documentElement.dataset.theme === 'light' ? 'dark' : 'light';
+  document.documentElement.dataset.theme = next;
+  localStorage.setItem('flora-theme', next);
+  paintToggle();
+});
+paintToggle();
+</script>
+
+</body>
+</html>

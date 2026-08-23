@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<link rel="icon" type="image/png" href="favicon.png">
+<title>Habitat Scorer — INVASCAPE</title>
+<link rel="stylesheet" href="theme.css">
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="team-auth.js"></script>
+<style>
+
+  .criterion-group{margin-bottom:4px;}
+  .criterion-group + .criterion-group{margin-top:16px;}
+  .criterion-label{
+    font-size:14px; font-weight:800; color:var(--ink); margin-bottom:2px;
+  }
+  .criterion-note{font-size:12px; color:var(--ink-dim); margin-bottom:10px;}
+
+  .subcrit{
+    border-top:1px solid var(--line);
+    padding:12px 0;
+  }
+  .subcrit:first-of-type{border-top:none; padding-top:0;}
+  .subcrit-name{font-size:14px; font-weight:700; margin-bottom:8px;}
+
+  .score-grid{display:flex; gap:6px;}
+  .score-btn{
+    flex:1; padding:9px 2px; border-radius:7px; border:1.5px solid var(--line);
+    background:var(--card-hi); color:var(--ink); font-weight:800; font-size:15px;
+    text-align:center; cursor:pointer; position:relative;
+  }
+  .score-btn small{display:block; font-weight:600; font-size:9px; margin-top:2px; color:var(--ink-dim); letter-spacing:.01em;}
+  .score-btn[data-s="1"].active{background:var(--s1); border-color:var(--s1); color:#0D1A0F;}
+  .score-btn[data-s="2"].active{background:var(--s2); border-color:var(--s2); color:#151A08;}
+  .score-btn[data-s="3"].active{background:var(--s3); border-color:var(--s3); color:#1A1508;}
+  .score-btn[data-s="4"].active{background:var(--s4); border-color:var(--s4); color:#1A0F05;}
+  .score-btn[data-s="5"].active{background:var(--s5); border-color:var(--s5); color:#1D0808;}
+  .score-btn.active small{color:inherit; opacity:.85;}
+
+  .indicator-text{
+    margin-top:8px; font-size:12.5px; line-height:1.4; color:var(--ink);
+    background:var(--card-hi); border-left:3px solid var(--amber);
+    padding:8px 10px; border-radius:0 6px 6px 0; display:none;
+  }
+  .indicator-text.show{display:block;}
+
+  .score-summary{
+    display:flex; align-items:center; gap:14px; padding:16px 14px;
+  }
+  .gauge{
+    width:74px; height:74px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+    font-size:22px; font-weight:800; flex-shrink:0; border:3px solid var(--line);
+  }
+  .gauge-meta{flex:1;}
+  .gauge-label{font-size:12px; color:var(--ink-dim); margin-bottom:2px;}
+  .gauge-class{font-size:16px; font-weight:800;}
+  .gauge-progress{font-size:12px; color:var(--ink-dim); margin-top:3px;}
+
+  .save-row{display:flex; gap:8px; margin-top:4px;}
+  .save-row .btn{flex:1;}
+
+  .logged-list{margin-top:6px;}
+  .logged-item{
+    display:flex; justify-content:space-between; align-items:center;
+    padding:9px 0; border-top:1px solid var(--line); font-size:13px;
+  }
+  .logged-item:first-child{border-top:none;}
+  .logged-plot{font-weight:700;}
+  .logged-meta{color:var(--ink-dim); font-size:11.5px;}
+
+  .export-row{display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;}
+  .export-row .btn{flex:1; min-width:120px;}
+  .clear-btn{width:100%; margin-top:8px; background:transparent; color:#C0392B; border:1px solid #4a2321; font-weight:700; border-radius:8px; padding:9px; font-size:13px;}
+</style>
+</head>
+<body>
+<script>document.documentElement.dataset.theme = localStorage.getItem('flora-theme') || 'dark';</script>
+
+<nav class="topnav">
+  <a class="brand" href="index.html"><img src="logo.png" alt="INVASCAPE" class="brand-mark"> INVASCAPE</a>
+  <div class="nav-links">
+    <a href="index.html">Home</a>
+    <a href="phytoscout.html">PhytoScout</a>
+    <a href="habitat-scorer.html" class="active">Habitat Scorer</a>
+    <a href="decision.html">Decision Layer</a>
+  </div>
+  <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">🌙</button>
+</nav>
+
+<header class="page-header">
+  <h1>Habitat Scorer</h1>
+  <div class="sub">Habitat Condition Scoring — Southeast Nigeria IAPS Survey (Afonso et al. 2020, adapted)</div>
+</header>
+
+<main>
+
+  <div id="teamAuthContainer"></div>
+
+  <div class="card">
+    <div class="card-title">Plot Identification</div>
+    <div class="field-row">
+      <div class="field">
+        <label for="plotId">Plot / Point ID</label>
+        <input type="text" id="plotId" placeholder="Match Plot Logger ID">
+      </div>
+      <div class="field">
+        <label for="lga">LGA</label>
+        <input type="text" id="lga" placeholder="e.g. Awka South">
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label for="recorder">Recorded by</label>
+        <input type="text" id="recorder" placeholder="Field worker name">
+      </div>
+      <div class="field">
+        <label for="fdate">Date</label>
+        <input type="date" id="fdate">
+      </div>
+    </div>
+    <label>Location</label>
+    <div class="helptext" style="margin-top:2px; margin-bottom:6px;">GPS is captured once, in PhytoScout — enter the same Plot ID above and this fills in automatically. Manual entry below only if no matching PhytoScout record exists yet.</div>
+    <div class="gps-row">
+      <span class="gps-status" id="gpsStatus">Enter a Plot ID above to look up its location</span>
+    </div>
+    <div class="field-row" style="margin-top:8px;">
+      <div class="field">
+        <label for="lat">Latitude</label>
+        <input type="text" id="lat" placeholder="manual entry">
+      </div>
+      <div class="field">
+        <label for="lng">Longitude</label>
+        <input type="text" id="lng" placeholder="manual entry">
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="padding:0;">
+    <div class="score-summary">
+      <div class="gauge" id="gauge">—</div>
+      <div class="gauge-meta">
+        <div class="gauge-label">Mean Habitat Score</div>
+        <div class="gauge-class" id="gaugeClass">Not yet scored</div>
+        <div class="gauge-progress" id="gaugeProgress">0 / 11 sub-criteria scored</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="criteriaContainer"></div>
+
+  <div class="card">
+    <div class="card-title">Save Plot Score</div>
+    <div class="save-row">
+      <button class="btn" id="saveBtn">Save scored plot</button>
+      <button class="btn btn-ghost" id="resetFormBtn">Clear form</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Logged Today <span id="loggedCount">0</span></div>
+    <div class="logged-list" id="loggedList">
+      <div class="empty-note">No plots scored yet — score your first plot above.</div>
+    </div>
+    <div class="export-row">
+      <button class="btn btn-outline" id="exportJson">Export JSON</button>
+      <button class="btn btn-outline" id="exportCsv">Export CSV</button>
+    </div>
+    <button class="clear-btn" id="clearAll">Clear all logged data</button>
+  </div>
+
+</main>
+
+<footer class="site-footer">Ecosynthra Lab · Field Tool</footer>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const CONDITION_LABELS = ["Natural","Near-natural","Fair","Modified","Irrev. degraded"];
+
+const CRITERIA = [
+  {
+    id:"1", title:"Criterion 1: Physical Disturbance", note:"",
+    subs:[
+      {id:"1a", name:"Topsoil loss / erosion", indicators:[
+        "No visible topsoil disturbance; intact soil profile",
+        "Minor localized disturbance (e.g. a footpath); soil profile mostly intact",
+        "Moderate disturbance over <25% of plot (e.g. partial road-cutting)",
+        "Substantial disturbance over 25–75% of plot (e.g. active quarrying/sand extraction)",
+        "Near-total topsoil removal (e.g. active construction site, large quarry face)"
+      ]},
+      {id:"1b", name:"Ploughing / tillage history", indicators:[
+        "No evidence of tillage; undisturbed ground layer",
+        "Old, overgrown ridges/furrows; not tilled in >2 years",
+        "Fallow with visible ridges from recent (1–2 yr) cultivation",
+        "Actively ploughed/tilled within the last season, no fertilizer evident",
+        "Actively ploughed/tilled with visible fertilizer/agrochemical use"
+      ]},
+      {id:"1c", name:"Altered hydrology", sub:"(especially near streams/floodplains — M. pigra habitat)", indicators:[
+        "Natural drainage pattern, no visible modification",
+        "Minor modification (e.g. a single footbridge/culvert) with negligible flow change",
+        "Some diversion or partial channelization present",
+        "Substantial diversion, damming, or drainage present, clearly altering natural flow",
+        "Hydrology completely altered (e.g. fully channelized, culverted, or drained)"
+      ]}
+    ]
+  },
+  {
+    id:"2", title:"Criterion 2: Biotic Impacts", note:"",
+    subs:[
+      {id:"2a", name:"Overgrazing / livestock trampling", indicators:[
+        "No grazing evidence",
+        "Occasional/light grazing, no visible trampling damage",
+        "Moderate grazing with some trampled patches",
+        "Heavy grazing, trampling visible across much of plot",
+        "Severe overgrazing, ground layer vegetation largely removed by livestock"
+      ]},
+      {id:"2b", name:"Brush-cutting / slashing", indicators:[
+        "No cutting/slashing evidence",
+        "Old cut stems, fully regrown, minimal recent activity",
+        "Some recent cutting, partial regrowth",
+        "Frequent/recent cutting, vegetation kept low across much of plot",
+        "Vegetation cleared to bare ground or stubble by recent slashing"
+      ]},
+      {id:"2c", name:"Firewood / timber over-harvesting", indicators:[
+        "No evidence of cutting for wood/timber",
+        "Occasional selective cutting, canopy largely intact",
+        "Moderate harvesting, some canopy gaps present",
+        "Frequent harvesting, canopy substantially opened",
+        "Heavy/unsustainable harvesting, most mature trees removed or stumped"
+      ]}
+    ]
+  },
+  {
+    id:"3", title:"Criterion 3: Indigenous Vegetation Cover & Structure", note:"",
+    subs:[
+      {id:"3a", name:"Indigenous vegetation % cover", indicators:[
+        ">80% indigenous cover","60–80% indigenous cover","40–60% indigenous cover",
+        "20–40% indigenous cover","<20% indigenous cover"
+      ]},
+      {id:"3b", name:"Time since last major clearing/burning", indicators:[
+        "No clearing/burning evidence; long-undisturbed vegetation",
+        "Cleared/burned >5 years ago; well-recovered",
+        "Cleared/burned 2–5 years ago; partially recovered",
+        "Cleared/burned within the last 1–2 years; early regrowth stage",
+        "Cleared/burned within the last season; minimal regrowth"
+      ]},
+      {id:"3c", name:"Median vegetation height", indicators:[
+        "Full-height mature canopy for the vegetation type",
+        "Slightly reduced height, mostly mature structure",
+        "Moderate height reduction, mixed mature/regrowth",
+        "Predominantly low regrowth/shrub height",
+        "Near-ground-level vegetation only (<0.5 m)"
+      ]},
+      {id:"3d", name:"Strata and spatial patterning of dominant growth forms", indicators:[
+        "Multiple intact strata (canopy, sub-canopy, ground layer), continuous cover",
+        "Multiple strata present, largely continuous with minor gaps",
+        "Reduced strata (e.g. canopy thinning), patchy cover",
+        "Single dominant stratum only, markedly patchy",
+        "No clear strata; sparse, highly fragmented cover"
+      ]}
+    ]
+  },
+  {
+    id:"4", title:"Criterion 4: Composition", note:"",
+    subs:[
+      {id:"4a", name:"Indigenous species richness", sub:"(rapid ordinal estimate within plot)", indicators:[
+        "High richness — many indigenous species evident",
+        "Moderately high richness","Moderate richness",
+        "Low richness — few indigenous species present",
+        "Very low/no indigenous species present"
+      ]}
+    ]
+  }
+];
+
+const ALL_SUB_IDS = CRITERIA.flatMap(c => c.subs.map(s => s.id));
+let scores = {}; // subId -> 1..5
+
+function render(){
+  const container = document.getElementById('criteriaContainer');
+  container.innerHTML = '';
+  CRITERIA.forEach(crit => {
+    const group = document.createElement('div');
+    group.className = 'card criterion-group';
+    let html = `<div class="criterion-label">${crit.title}</div>`;
+    crit.subs.forEach(sub => {
+      html += `<div class="subcrit" data-sub="${sub.id}">
+        <div class="subcrit-name">${sub.id} — ${sub.name}${sub.sub ? ` <span style="font-weight:400;color:var(--ink-dim);font-size:12px;">${sub.sub}</span>` : ''}</div>
+        <div class="score-grid">
+          ${[1,2,3,4,5].map(n => `<button type="button" class="score-btn" data-s="${n}" data-sub="${sub.id}">${n}<small>${CONDITION_LABELS[n-1]}</small></button>`).join('')}
+        </div>
+        <div class="indicator-text" id="ind-${sub.id}"></div>
+      </div>`;
+    });
+    group.innerHTML = html;
+    container.appendChild(group);
+  });
+
+  container.querySelectorAll('.score-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const subId = btn.dataset.sub;
+      const s = parseInt(btn.dataset.s, 10);
+      scores[subId] = s;
+      const subDef = CRITERIA.flatMap(c=>c.subs).find(x=>x.id===subId);
+      // update active state within this sub-criterion
+      document.querySelectorAll(`.score-btn[data-sub="${subId}"]`).forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const indEl = document.getElementById(`ind-${subId}`);
+      indEl.textContent = subDef.indicators[s-1];
+      indEl.classList.add('show');
+      updateGauge();
+    });
+  });
+}
+
+function updateGauge(){
+  const scored = ALL_SUB_IDS.filter(id => scores[id] !== undefined);
+  const gauge = document.getElementById('gauge');
+  const gaugeClass = document.getElementById('gaugeClass');
+  const gaugeProgress = document.getElementById('gaugeProgress');
+  gaugeProgress.textContent = `${scored.length} / 11 sub-criteria scored`;
+
+  if(scored.length === 0){
+    gauge.textContent = '—';
+    gauge.style.borderColor = 'var(--line)';
+    gauge.style.color = 'var(--ink-dim)';
+    gaugeClass.textContent = 'Not yet scored';
+    return;
+  }
+  const mean = scored.reduce((sum,id) => sum + scores[id], 0) / scored.length;
+  const meanRounded = Math.round(mean * 100) / 100;
+  gauge.textContent = meanRounded.toFixed(1);
+
+  let cls, color;
+  if(mean <= 2.4){ cls = 'Pristine / near-natural'; color = 'var(--s1)'; }
+  else { cls = 'Degraded'; color = 'var(--s5)'; }
+  gauge.style.borderColor = color;
+  gauge.style.color = color;
+  gaugeClass.textContent = scored.length < 11
+    ? `${cls} (provisional — ${11-scored.length} remaining)`
+    : cls;
+}
+
+// ---- Location lookup from PhytoScout, by Plot ID ----
+function tryAutoFillLocation(){
+  const plotId = document.getElementById('plotId').value.trim();
+  const status = document.getElementById('gpsStatus');
+  if(!plotId){ status.textContent = 'Enter a Plot ID above to look up its location'; return; }
+
+  // local PhytoScout log first (fast, works offline)
+  let entry = null;
+  try{
+    const log = JSON.parse(localStorage.getItem('ecoplotscribeLog')) || [];
+    entry = log.slice().reverse().find(e => e.plotId === plotId && e.lat && e.lng);
+  }catch(e){}
+
+  if(entry){
+    document.getElementById('lat').value = entry.lat;
+    document.getElementById('lng').value = entry.lng;
+    status.textContent = '📍 Location matched from PhytoScout (this device)';
+    return;
+  }
+
+  // fall back to the shared database if signed in
+  if(typeof fbDb !== 'undefined' && teamSignedIn){
+    status.textContent = 'Checking shared database…';
+    fbDb.ref('ecoplotscribe/' + plotId).once('value').then(snap => {
+      const remote = snap.val();
+      if(remote && remote.lat && remote.lng){
+        document.getElementById('lat').value = remote.lat;
+        document.getElementById('lng').value = remote.lng;
+        status.textContent = '📍 Location matched from PhytoScout (shared database)';
+      } else {
+        status.textContent = 'No matching PhytoScout record found — enter coordinates manually below';
+      }
+    });
+  } else {
+    status.textContent = 'No matching PhytoScout record on this device — enter coordinates manually below, or sign in to check the shared database';
+  }
+}
+document.getElementById('plotId').addEventListener('blur', tryAutoFillLocation);
+
+// ---- Storage ----
+const STORAGE_KEY = 'habitatScorerLog';
+function getLog(){
+  try{ return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; }catch(e){ return []; }
+}
+function setLog(log){ localStorage.setItem(STORAGE_KEY, JSON.stringify(log)); }
+
+function renderLog(){
+  const log = getLog();
+  document.getElementById('loggedCount').textContent = log.length;
+  const list = document.getElementById('loggedList');
+  if(log.length === 0){
+    list.innerHTML = '<div class="empty-note">No plots scored yet — score your first plot above.</div>';
+    return;
+  }
+  list.innerHTML = log.slice().reverse().map(entry => `
+    <div class="logged-item">
+      <div>
+        <div class="logged-plot">${entry.plotId || '(no ID)'} — ${entry.meanScore.toFixed(2)} <span class="helptext">${entry.synced ? '☁️ synced' : '⏳ pending sync'}</span></div>
+        <div class="logged-meta">${entry.classification} · ${entry.lga || ''} · ${entry.date || ''}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 1800);
+}
+
+document.getElementById('saveBtn').addEventListener('click', () => {
+  const scored = ALL_SUB_IDS.filter(id => scores[id] !== undefined);
+  if(scored.length === 0){
+    showToast('Score at least one sub-criterion first');
+    return;
+  }
+  const plotId = document.getElementById('plotId').value.trim();
+  if(!plotId){
+    showToast('Enter a Plot ID before saving');
+    return;
+  }
+  const mean = scored.reduce((sum,id) => sum + scores[id], 0) / scored.length;
+  const entry = {
+    plotId,
+    lga: document.getElementById('lga').value.trim(),
+    recorder: document.getElementById('recorder').value.trim(),
+    date: document.getElementById('fdate').value,
+    lat: document.getElementById('lat').value,
+    lng: document.getElementById('lng').value,
+    subScores: {...scores},
+    subCount: scored.length,
+    meanScore: Math.round(mean*100)/100,
+    classification: mean <= 2.4 ? 'Pristine/near-natural' : 'Degraded',
+    complete: scored.length === 11,
+    savedAt: new Date().toISOString()
+  };
+  const log = getLog();
+  log.push(entry);
+  setLog(log);
+  renderLog();
+  showToast('Plot score saved');
+  syncPlotToFirebase(entry);
+});
+
+let teamSignedIn = false;
+function syncPlotToFirebase(entry){
+  if(typeof fbDb === 'undefined' || !teamSignedIn){ return; } // stays local-only until signed in
+  fbDb.ref('habitatScorer/' + entry.plotId).set(entry)
+    .then(() => markSyncStatus(entry.plotId, true))
+    .catch(() => markSyncStatus(entry.plotId, false));
+}
+function markSyncStatus(plotId, ok){
+  const log = getLog();
+  const idx = log.findIndex(e => e.plotId === plotId);
+  if(idx >= 0){ log[idx].synced = ok; setLog(log); renderLog(); }
+}
+function retryPendingSyncs(){
+  if(!teamSignedIn) return;
+  getLog().filter(e => !e.synced).forEach(syncPlotToFirebase);
+}
+window.addEventListener('online', retryPendingSyncs);
+
+document.getElementById('resetFormBtn').addEventListener('click', () => {
+  scores = {};
+  ['plotId','lga','recorder','fdate','lat','lng'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('gpsStatus').textContent = 'Enter a Plot ID above to look up its location';
+  document.querySelectorAll('.score-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.indicator-text').forEach(el => { el.classList.remove('show'); el.textContent=''; });
+  updateGauge();
+});
+
+document.getElementById('exportJson').addEventListener('click', () => {
+  const log = getLog();
+  if(log.length === 0){ showToast('No data to export'); return; }
+  const blob = new Blob([JSON.stringify(log, null, 2)], {type:'application/json'});
+  downloadBlob(blob, `habitat_scores_${dateStamp()}.json`);
+});
+
+document.getElementById('exportCsv').addEventListener('click', () => {
+  const log = getLog();
+  if(log.length === 0){ showToast('No data to export'); return; }
+  const subIds = ALL_SUB_IDS;
+  const header = ['plotId','lga','recorder','date','lat','lng', ...subIds, 'subCount','meanScore','classification','complete','savedAt'];
+  const rows = log.map(e => [
+    e.plotId, e.lga, e.recorder, e.date, e.lat, e.lng,
+    ...subIds.map(id => (e.subScores && e.subScores[id] !== undefined) ? e.subScores[id] : ''),
+    e.subCount, e.meanScore, e.classification, e.complete, e.savedAt
+  ]);
+  const csv = [header.join(','), ...rows.map(r => r.map(csvEscape).join(','))].join('\n');
+  const blob = new Blob([csv], {type:'text/csv'});
+  downloadBlob(blob, `habitat_scores_${dateStamp()}.csv`);
+});
+
+function csvEscape(v){
+  const s = String(v ?? '');
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s;
+}
+function dateStamp(){
+  return new Date().toISOString().slice(0,10);
+}
+function downloadBlob(blob, filename){
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+document.getElementById('clearAll').addEventListener('click', () => {
+  if(confirm('Clear all logged habitat scores? This cannot be undone.')){
+    localStorage.removeItem(STORAGE_KEY);
+    renderLog();
+    showToast('Logged data cleared');
+  }
+});
+
+// theme toggle
+function paintToggle(){
+  document.getElementById('themeToggle').textContent = document.documentElement.dataset.theme === 'light' ? '☀️' : '🌙';
+}
+document.getElementById('themeToggle').addEventListener('click', () => {
+  const next = document.documentElement.dataset.theme === 'light' ? 'dark' : 'light';
+  document.documentElement.dataset.theme = next;
+  localStorage.setItem('flora-theme', next);
+  paintToggle();
+});
+paintToggle();
+
+// init
+render();
+renderLog();
+document.getElementById('fdate').valueAsDate = new Date();
+initTeamAuth('teamAuthContainer', (signedIn) => {
+  teamSignedIn = signedIn;
+  if(signedIn) setTimeout(retryPendingSyncs, 800);
+});
+</script>
+
+</body>
+</html>
