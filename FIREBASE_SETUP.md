@@ -11,48 +11,44 @@ there's no web app yet, click the `</>` icon to create one → copy the
 `firebaseConfig` object → paste the values into `firebase-config.js` in
 this folder, replacing the placeholders.
 
-## 2. Create the team authentication account(s)
+## 2. Create the shared team account
 
 Authentication → Sign-in method tab → enable **Email/Password**.
-Then Authentication → Users tab → create an account that is intended for
-project use. Prefer a dedicated institutional account or per-user accounts
-that are managed by the project lead.
+Then Authentication → Users tab → Add user:
+- Email: `ecosynthralab@gmail.com`
+- Password: whatever you want the team to share
 
-Do not keep a shared password in a public chat, browser source, or repo.
-Prefer a managed team account with a known owner, and use Firebase Auth +
-role-based rules in production. If you must use a shared account for a
-short-term demo, treat it like a secret and rotate it regularly.
+Since this is a real inbox, Firebase's "forgot password" flow will actually
+deliver a reset email here if the shared password ever needs recovering —
+worth knowing whoever has access to this inbox can effectively reset the
+team's login.
 
-This app should not depend on a public shared credential as its primary
-security control.
+Give this email + password to your co-researchers. It's what they'll type
+into the "Team Sign In" card on Habitat Scorer and Decision Layer. Everyone
+uses the same one — this isn't per-person accounts, just a shared gate.
 
 ## 3. Set the database rules
 
-Realtime Database → Rules tab → replace the contents with a team-scoped
-structure such as:
+Realtime Database → Rules tab → replace the contents with:
 
 ```json
 {
   "rules": {
-    "teams": {
-      "$teamId": {
-        "ecoplotscribe": {
-          ".read": "auth != null",
-          ".write": "auth != null"
-        },
-        "habitatScorer": {
-          ".read": "auth != null",
-          ".write": "auth != null"
-        }
-      }
+    "ecoplotscribe": {
+      ".read": true,
+      ".write": true
+    },
+    "habitatScorer": {
+      ".read": "auth != null",
+      ".write": "auth != null"
     }
   }
 }
 ```
 
-This keeps each team or user namespace separate. For a prototype test, a
-single team ID can be used on a device or browser profile, but the design is
-meant to keep records from different teams in separate Firebase branches.
+Click **Publish**. This is what makes PhytoScout genuinely public (no
+login needed to submit a plot) while Habitat Scorer and Decision Layer
+require the shared team login.
 
 ## How it behaves once this is done
 
