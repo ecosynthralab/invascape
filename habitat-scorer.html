@@ -354,7 +354,8 @@ function tryAutoFillLocation(){
   // local PhytoScout log first (fast, works offline)
   let entry = null;
   try{
-    const log = JSON.parse(localStorage.getItem('ecoplotscribeLog')) || [];
+    const key = getTeamScopedStorageKey('ecoplotscribeLog');
+    const log = JSON.parse(localStorage.getItem(key)) || [];
     entry = log.slice().reverse().find(e => e.plotId === plotId && e.lat && e.lng);
   }catch(e){}
 
@@ -387,9 +388,19 @@ document.getElementById('plotId').addEventListener('blur', tryAutoFillLocation);
 // ---- Storage ----
 const STORAGE_KEY = 'habitatScorerLog';
 function getLog(){
-  try{ return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; }catch(e){ return []; }
+  const key = getTeamScopedStorageKey(STORAGE_KEY);
+  try{ return JSON.parse(localStorage.getItem(key)) || []; }catch(e){ return []; }
 }
-function setLog(log){ localStorage.setItem(STORAGE_KEY, JSON.stringify(log)); }
+function setLog(log){ localStorage.setItem(getTeamScopedStorageKey(STORAGE_KEY), JSON.stringify(log)); }
+function escapeHtml(value){
+  return String(value ?? '').replace(/[&<>"']/g, ch => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  }[ch]));
+}
 
 function renderLog(){
   const log = getLog();
@@ -402,8 +413,8 @@ function renderLog(){
   list.innerHTML = log.slice().reverse().map(entry => `
     <div class="logged-item">
       <div>
-        <div class="logged-plot">${entry.plotId || '(no ID)'} — ${entry.meanScore.toFixed(2)} <span class="helptext">${entry.synced ? '☁️ synced' : '⏳ pending sync'}</span></div>
-        <div class="logged-meta">${entry.classification} · ${entry.lga || ''} · ${entry.date || ''}</div>
+        <div class="logged-plot">${escapeHtml(entry.plotId || '(no ID)')} — ${Number(entry.meanScore || 0).toFixed(2)} <span class="helptext">${entry.synced ? '☁️ synced' : '⏳ pending sync'}</span></div>
+        <div class="logged-meta">${escapeHtml(entry.classification || '')} · ${escapeHtml(entry.lga || '')} · ${escapeHtml(entry.date || '')}</div>
       </div>
     </div>
   `).join('');
@@ -453,7 +464,8 @@ document.getElementById('saveBtn').addEventListener('click', () => {
 let teamSignedIn = false;
 function syncPlotToFirebase(entry){
   if(typeof fbDb === 'undefined' || !teamSignedIn){ return; } // stays local-only until signed in
-  fbDb.ref('habitatScorer/' + entry.plotId).set(entry)
+  const teamPath = getTeamScopedDbPath('habitatScorer');
+  fbDb.ref(teamPath + '/' + entry.plotId).set(entry)
     .then(() => markSyncStatus(entry.plotId, true))
     .catch(() => markSyncStatus(entry.plotId, false));
 }
@@ -515,8 +527,8 @@ function downloadBlob(blob, filename){
 }
 
 document.getElementById('clearAll').addEventListener('click', () => {
-  if(confirm('Clear all logged habitat scores? This cannot be undone.')){
-    localStorage.removeItem(STORAGE_KEY);
+  if(confirm('Clear all logged habitat scores for this team? This cannot be undone.')){
+    localStorage.removeItem(getTeamScopedStorageKey(STORAGE_KEY));
     renderLog();
     showToast('Logged data cleared');
   }

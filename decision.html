@@ -147,10 +147,28 @@ const REMEDIATION = {
 };
 
 // ---- Local storage readers (per-device fallback / offline cache) ----
-function getEcoLog(){ try{ return JSON.parse(localStorage.getItem('ecoplotscribeLog')) || []; }catch(e){ return []; } }
-function getHabitatLog(){ try{ return JSON.parse(localStorage.getItem('habitatScorerLog')) || []; }catch(e){ return []; } }
-function getPredictors(){ try{ return JSON.parse(localStorage.getItem('floraPredictors')) || {}; }catch(e){ return {}; } }
-function setPredictors(obj){ localStorage.setItem('floraPredictors', JSON.stringify(obj)); }
+function getEcoLog(){
+  const key = getTeamScopedStorageKey('ecoplotscribeLog');
+  try{ return JSON.parse(localStorage.getItem(key)) || []; }catch(e){ return []; }
+}
+function getHabitatLog(){
+  const key = getTeamScopedStorageKey('habitatScorerLog');
+  try{ return JSON.parse(localStorage.getItem(key)) || []; }catch(e){ return []; }
+}
+function getPredictors(){
+  const key = getTeamScopedStorageKey('floraPredictors');
+  try{ return JSON.parse(localStorage.getItem(key)) || {}; }catch(e){ return {}; }
+}
+function setPredictors(obj){ localStorage.setItem(getTeamScopedStorageKey('floraPredictors'), JSON.stringify(obj)); }
+function escapeHtml(value){
+  return String(value ?? '').replace(/[&<>"']/g, ch => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  }[ch]));
+}
 
 let predictorGrid = null; // [{lat,lng,dist_road_m,dist_cropland_m}, ...] loaded from predictor-grid.csv
 let teamSignedIn = false;
@@ -338,14 +356,14 @@ function render(){
     }
 
     return `<tr>
-      <td class="plot-id-cell">${plotId}</td>
-      <td>${habitatClass}</td>
-      <td>${infest.species.length ? infest.species.map(s=>`<span class="species-pill"><i>${s}</i></span>`).join('') : '<span class="species-pill">none</span>'}</td>
+      <td class="plot-id-cell">${escapeHtml(plotId)}</td>
+      <td>${escapeHtml(habitatClass)}</td>
+      <td>${infest.species.length ? infest.species.map(s=>`<span class="species-pill"><i>${escapeHtml(s)}</i></span>`).join('') : '<span class="species-pill">none</span>'}</td>
       <td>${infest.density ? infest.density.toFixed(2) : '0.00'}</td>
       <td>${roadStr}</td>
       <td>${cropStr}</td>
       <td>${tierBadge(tier)}</td>
-      <td class="remediation-cell">${remediationText}</td>
+      <td class="remediation-cell">${escapeHtml(remediationText)}</td>
     </tr>`;
   }).join('');
 
@@ -400,7 +418,7 @@ document.getElementById('predictorFile').addEventListener('change', (e) => {
 });
 
 document.getElementById('clearPredictors').addEventListener('click', () => {
-  localStorage.removeItem('floraPredictors');
+  localStorage.removeItem(getTeamScopedStorageKey('floraPredictors'));
   showToast('Manual overrides cleared — using auto-matched grid values again');
   render();
 });
@@ -411,8 +429,10 @@ document.getElementById('proximityThreshold').addEventListener('input', render);
 // ---- Firebase: pull team-wide data once signed in ----
 function loadRemoteData(){
   if(typeof fbDb === 'undefined') return;
-  fbDb.ref('ecoplotscribe').once('value').then(snap => { remoteEco = snap.val() || {}; render(); });
-  fbDb.ref('habitatScorer').once('value').then(snap => { remoteHabitat = snap.val() || {}; render(); });
+  const ecoPath = getTeamScopedDbPath('ecoplotscribe');
+  const habitatPath = getTeamScopedDbPath('habitatScorer');
+  fbDb.ref(ecoPath).once('value').then(snap => { remoteEco = snap.val() || {}; render(); });
+  fbDb.ref(habitatPath).once('value').then(snap => { remoteHabitat = snap.val() || {}; render(); });
 }
 
 // theme toggle
@@ -432,8 +452,9 @@ renderKnowledgeBase();
 loadPredictorGrid().then(render);
 initTeamAuth('teamAuthContainer', (signedIn) => {
   teamSignedIn = signedIn;
-  document.getElementById('decisionContent').style.display = signedIn ? 'block' : 'none';
+  document.getElementById('decisionContent').style.display = 'block';
   if(signedIn) loadRemoteData();
+  else render();
 });
 </script>
 

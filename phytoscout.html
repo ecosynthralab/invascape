@@ -477,8 +477,20 @@ function updateSummary(){
 
 // ---- Storage ----
 const STORAGE_KEY = 'ecoplotscribeLog';
-function getLog(){ try{ return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; }catch(e){ return []; } }
-function setLog(log){ localStorage.setItem(STORAGE_KEY, JSON.stringify(log)); }
+function getLog(){
+  const key = getTeamScopedStorageKey(STORAGE_KEY);
+  try{ return JSON.parse(localStorage.getItem(key)) || []; }catch(e){ return []; }
+}
+function setLog(log){ localStorage.setItem(getTeamScopedStorageKey(STORAGE_KEY), JSON.stringify(log)); }
+function escapeHtml(value){
+  return String(value ?? '').replace(/[&<>"']/g, ch => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  }[ch]));
+}
 
 function showToast(msg){
   const t = document.getElementById('toast');
@@ -497,8 +509,8 @@ function renderLog(){
   list.innerHTML = log.slice().reverse().map(e => `
     <div class="logged-item">
       <div>
-        <div class="logged-plot">${e.plotId || '(no ID)'} — ${e.totalSpecies} spp, ${e.quadratCount} quadrats <span class="helptext">${e.synced ? '☁️ synced' : '⏳ pending sync'}</span></div>
-        <div class="logged-meta">${e.zone||''} / ${e.role||''} · ${e.lga||''}${e.state?', '+e.state:''} · ${e.hasTargetSpecies?'target spp present':'no target spp'} · ${e.date||''}</div>
+        <div class="logged-plot">${escapeHtml(e.plotId || '(no ID)')} — ${escapeHtml(e.totalSpecies)} spp, ${escapeHtml(e.quadratCount)} quadrats <span class="helptext">${e.synced ? '☁️ synced' : '⏳ pending sync'}</span></div>
+        <div class="logged-meta">${escapeHtml(e.zone||'')} / ${escapeHtml(e.role||'')} · ${escapeHtml(e.lga||'')}${escapeHtml(e.state ? ', ' + e.state : '')} · ${e.hasTargetSpecies ? 'target spp present' : 'no target spp'} · ${escapeHtml(e.date||'')}</div>
       </div>
     </div>
   `).join('');
@@ -549,7 +561,8 @@ document.getElementById('savePlotBtn').addEventListener('click', () => {
 
 function syncPlotToFirebase(entry){
   if(typeof fbDb === 'undefined'){ return; }
-  fbDb.ref('ecoplotscribe/' + entry.plotId).set(entry)
+  const teamPath = getTeamScopedDbPath('ecoplotscribe');
+  fbDb.ref(teamPath + '/' + entry.plotId).set(entry)
     .then(() => markSyncStatus(entry.plotId, true))
     .catch(() => markSyncStatus(entry.plotId, false));
 }
@@ -636,8 +649,8 @@ function downloadBlob(blob, filename){
 }
 
 document.getElementById('clearAll').addEventListener('click', () => {
-  if(confirm('Clear all logged plots? This cannot be undone.')){
-    localStorage.removeItem(STORAGE_KEY);
+  if(confirm('Clear all logged plots for this team? This cannot be undone.')){
+    localStorage.removeItem(getTeamScopedStorageKey(STORAGE_KEY));
     renderLog();
     showToast('Logged data cleared');
   }
