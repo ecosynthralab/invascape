@@ -1,0 +1,36 @@
+name: Refresh predictor grid
+
+on:
+  schedule:
+    - cron: "0 3 1 */3 *" # 03:00 UTC on the 1st of every third month
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install earthengine-api
+      - name: Export from Earth Engine and rebuild predictor-grid.csv
+        env:
+          EE_SERVICE_ACCOUNT_KEY: ${{ secrets.EE_SERVICE_ACCOUNT_KEY }}
+          EE_PROJECT: ecosynthralab
+        run: python tools/update_predictor_grid.py
+      - name: Commit if changed
+        run: |
+          if git diff --quiet predictor-grid.csv; then
+            echo "No change"
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add predictor-grid.csv
+            git commit -m "Refresh predictor grid from Earth Engine"
+            git push
+          fi
