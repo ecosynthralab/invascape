@@ -5,7 +5,6 @@ Storage billing), read back page by page, and written to predictor-grid.csv. The
 if it passes sanity checks.
 """
 import csv
-import json
 import os
 import statistics
 import sys
@@ -25,11 +24,14 @@ OUT_PATH = os.path.join(os.path.dirname(__file__), "..", "predictor-grid.csv")
 
 
 def init():
-    key = os.environ.get("EE_SERVICE_ACCOUNT_KEY")
-    if not key:
-        sys.exit("EE_SERVICE_ACCOUNT_KEY is not set")
-    info = json.loads(key)
-    creds = ee.ServiceAccountCredentials(info["client_email"], key_data=key)
+    import google.auth
+
+    scopes = [
+        "https://www.googleapis.com/auth/earthengine",
+        "https://www.googleapis.com/auth/cloud-platform",
+    ]
+    # Credentials come from workload identity federation (set up by google-github-actions/auth).
+    creds, _ = google.auth.default(scopes=scopes)
     ee.Initialize(creds, project=PROJECT)
 
 
