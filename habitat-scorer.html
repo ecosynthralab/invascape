@@ -6,11 +6,7 @@
 <link rel="icon" type="image/png" href="favicon.png">
 <title>Habitat Scorer — INVASCAPE</title>
 <link rel="stylesheet" href="theme.css">
-<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
-<script src="firebase-config.js"></script>
-<script src="team-auth.js"></script>
+<script src="storage-migrate.js"></script>
 <style>
 
   .criterion-group{margin-bottom:4px;}
@@ -75,6 +71,54 @@
   .export-row{display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;}
   .export-row .btn{flex:1; min-width:120px;}
   .clear-btn{width:100%; margin-top:8px; background:transparent; color:#C0392B; border:1px solid #4a2321; font-weight:700; border-radius:8px; padding:9px; font-size:13px;}
+
+  .src-tag{font-weight:600; font-size:11px; color:var(--amber); margin-left:6px;}
+
+  .mode-tabs{display:flex; gap:6px; padding:6px;}
+  .mode-tab{
+    flex:1; padding:10px 4px; border-radius:8px; border:1.5px solid var(--line);
+    background:var(--card-hi); color:var(--ink); font-weight:700; font-size:13px; cursor:pointer;
+  }
+  .mode-tab small{display:block; font-weight:600; font-size:10px; color:var(--ink-dim); margin-top:2px;}
+  .mode-tab.active{border-color:var(--amber); color:var(--amber);}
+  .mode-panel[hidden]{display:none;}
+  .demo-badge{
+    display:inline-block; margin-left:6px; padding:2px 8px; border-radius:10px; font-size:10px;
+    font-weight:800; letter-spacing:.04em; background:rgba(212,167,44,.18); color:var(--amber);
+    border:1px solid rgba(212,167,44,.35);
+  }
+  .privacy-note{font-size:12px; color:var(--ink-dim); line-height:1.4; margin-bottom:10px;}
+  .meta-grid{display:grid; grid-template-columns:auto 1fr; gap:3px 12px; font-size:12.5px; margin:10px 0;}
+  .meta-grid dt{color:var(--ink-dim);} .meta-grid dd{margin:0; font-weight:700;}
+  .check-list{list-style:none; margin:8px 0; padding:0; font-size:13px; line-height:1.4;}
+  .check-list li{padding:6px 0 6px 26px; position:relative; border-top:1px solid var(--line);}
+  .check-list li:first-child{border-top:none;}
+  .check-list li::before{position:absolute; left:2px; top:6px;}
+  .check-list li.ok::before{content:"✅";} .check-list li.warn::before{content:"⚠️";} .check-list li.info::before{content:"ℹ️";}
+  .plot-canvas{width:100%; height:auto; border-radius:8px; touch-action:none; cursor:crosshair; display:block;}
+  .progress-wrap{margin:8px 0;} .progress-wrap progress{width:100%;}
+  .result-table{width:100%; border-collapse:collapse; font-size:13px; margin:8px 0;}
+  .result-table td, .result-table th{padding:6px 4px; border-top:1px solid var(--line); text-align:left;}
+  .result-table td:last-child, .result-table th:last-child{text-align:right;}
+  .quality-pill{display:inline-block; padding:3px 10px; border-radius:12px; font-size:12px; font-weight:800;}
+  .quality-good{background:rgba(63,163,77,.18); color:#6FCB7F;}
+  .quality-fair{background:rgba(212,167,44,.18); color:var(--amber);}
+  .quality-low{background:rgba(192,57,43,.18); color:#E06556;}
+  .btn-row{display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;}
+  .btn-row .btn{flex:1; min-width:120px;}
+  .tilt-readout{font-size:15px; font-weight:800; margin:6px 0;}
+  .phone-video{width:100%; border-radius:8px; background:#000; display:block;}
+  .video-wrap{position:relative;}
+  .video-guide{position:absolute; inset:12% 12%; border:2px dashed rgba(255,255,255,.75); border-radius:6px; pointer-events:none;}
+
+  .question{border-top:1px solid var(--line); padding:12px 0;}
+  .question:first-of-type{border-top:none; padding-top:0;}
+  .question-text{font-size:14px; font-weight:700; margin-bottom:8px;}
+  .q-opt{
+    display:block; width:100%; text-align:left; margin-bottom:6px; padding:9px 10px; border-radius:7px;
+    border:1.5px solid var(--line); background:var(--card-hi); color:var(--ink); font-size:13px; cursor:pointer;
+  }
+  .q-opt.active{border-color:var(--amber); color:var(--amber); font-weight:700;}
 </style>
 </head>
 <body>
@@ -97,8 +141,6 @@
 </header>
 
 <main>
-
-  <div id="teamAuthContainer"></div>
 
   <div class="card">
     <div class="card-title">Plot Identification</div>
@@ -148,6 +190,66 @@
         <div class="gauge-progress" id="gaugeProgress">0 / 11 sub-criteria scored</div>
       </div>
     </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Add a photo (optional)</div>
+    <div class="mode-tabs" role="tablist" aria-label="Photo source" style="padding:0;">
+      <button type="button" class="mode-tab active" data-mode="manual" role="tab" aria-selected="true">No photo<small>Answer and score</small></button>
+      <button type="button" class="mode-tab" data-mode="drone" role="tab" aria-selected="false">Drone image<small>From a drone photo</small></button>
+      <button type="button" class="mode-tab" data-mode="phone" role="tab" aria-selected="false">Phone photo<small>Quick estimate</small></button>
+    </div>
+  </div>
+
+  <div class="card mode-panel" id="panel-drone" hidden>
+    <div class="card-title">Drone image <span class="demo-badge">DEMO MODEL</span></div>
+    <div class="privacy-note">Your photo is analysed on this device only. Nothing is uploaded or stored by the app. The analysis below uses a simple demo colour test, not a trained model, so it does not fill in any scores yet.</div>
+    <input type="file" id="droneFile" accept="image/jpeg,image/png">
+    <dl class="meta-grid" id="droneMeta" hidden></dl>
+    <ul class="check-list" id="droneChecks"></ul>
+    <div id="droneCropWrap" hidden>
+      <div class="helptext" style="margin-bottom:6px;">Drag on the picture to outline the plot, so paths and edges are left out.</div>
+      <canvas id="droneCanvas" class="plot-canvas"></canvas>
+      <div class="btn-row"><button type="button" class="btn" id="droneRun">Analyse plot area</button></div>
+      <div class="progress-wrap" id="droneProgressWrap" hidden><progress id="droneProgress" max="1" value="0"></progress></div>
+    </div>
+    <div id="droneResult" hidden>
+      <canvas id="droneOverlay" class="plot-canvas" style="cursor:default;"></canvas>
+      <div id="droneResultBody"></div>
+      <div class="btn-row">
+        <button type="button" class="btn btn-outline" id="droneApply" disabled>Use suggested scores</button>
+        <button type="button" class="btn btn-outline" id="droneCsv">Result CSV</button>
+        <button type="button" class="btn btn-outline" id="droneGeo">GeoJSON</button>
+        <button type="button" class="btn btn-outline" id="dronePng">Overlay PNG</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card mode-panel" id="panel-phone" hidden>
+    <div class="card-title">Phone photo <span class="demo-badge">DEMO MODEL</span></div>
+    <div class="privacy-note">Quick field estimate. The photo stays on this device. Phone photos give a rough result only, so this mode never fills the 1–5 scores. Hold the phone flat, pointing straight down, about 1.5 m above the plot.</div>
+    <div class="video-wrap" id="phoneVideoWrap" hidden>
+      <video id="phoneVideo" class="phone-video" playsinline muted></video>
+      <div class="video-guide"></div>
+    </div>
+    <div class="tilt-readout" id="phoneTilt" hidden></div>
+    <div class="btn-row">
+      <button type="button" class="btn btn-outline" id="phoneCamOpen">Open camera</button>
+      <button type="button" class="btn" id="phoneCapture" hidden>Take photo</button>
+      <button type="button" class="btn btn-ghost" id="phoneCamClose" hidden>Close camera</button>
+    </div>
+    <div class="field" style="margin-top:10px;">
+      <label for="phoneFile">Or choose a photo from your phone</label>
+      <input type="file" id="phoneFile" accept="image/*">
+    </div>
+    <ul class="check-list" id="phoneChecks"></ul>
+    <div id="phoneResult" hidden></div>
+  </div>
+
+  <div class="card" id="questionsCard">
+    <div class="card-title">Quick questions <span id="questionsCount"></span></div>
+    <div class="privacy-note">A camera cannot see these. Choose the answer that fits your plot best. They fill the matching scores below, which you can still adjust.</div>
+    <div id="questionsContainer"></div>
   </div>
 
   <div id="criteriaContainer"></div>
@@ -279,6 +381,21 @@ const CRITERIA = [
 
 const ALL_SUB_IDS = CRITERIA.flatMap(c => c.subs.map(s => s.id));
 let scores = {}; // subId -> 1..5
+let scoreSources = {}; // subId -> 'manual' | 'answer' | 'image'
+const SOURCE_LABELS = {manual:'', answer:'from your answer', image:'from image'};
+
+function setScore(subId, s, source){
+  scores[subId] = s;
+  scoreSources[subId] = source || 'manual';
+  const subDef = CRITERIA.flatMap(c=>c.subs).find(x=>x.id===subId);
+  document.querySelectorAll(`.score-btn[data-sub="${subId}"]`).forEach(b => b.classList.toggle('active', parseInt(b.dataset.s,10) === s));
+  const indEl = document.getElementById(`ind-${subId}`);
+  indEl.textContent = subDef.indicators[s-1];
+  indEl.classList.add('show');
+  document.getElementById(`src-${subId}`).textContent = SOURCE_LABELS[scoreSources[subId]];
+  updateGauge();
+  document.dispatchEvent(new CustomEvent('scorechange'));
+}
 
 function render(){
   const container = document.getElementById('criteriaContainer');
@@ -289,7 +406,7 @@ function render(){
     let html = `<div class="criterion-label">${crit.title}</div>`;
     crit.subs.forEach(sub => {
       html += `<div class="subcrit" data-sub="${sub.id}">
-        <div class="subcrit-name">${sub.id} — ${sub.name}${sub.sub ? ` <span style="font-weight:400;color:var(--ink-dim);font-size:12px;">${sub.sub}</span>` : ''}</div>
+        <div class="subcrit-name">${sub.id} — ${sub.name}${sub.sub ? ` <span style="font-weight:400;color:var(--ink-dim);font-size:12px;">${sub.sub}</span>` : ''}<span class="src-tag" id="src-${sub.id}"></span></div>
         <div class="score-grid">
           ${[1,2,3,4,5].map(n => `<button type="button" class="score-btn" data-s="${n}" data-sub="${sub.id}">${n}<small>${CONDITION_LABELS[n-1]}</small></button>`).join('')}
         </div>
@@ -301,19 +418,7 @@ function render(){
   });
 
   container.querySelectorAll('.score-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const subId = btn.dataset.sub;
-      const s = parseInt(btn.dataset.s, 10);
-      scores[subId] = s;
-      const subDef = CRITERIA.flatMap(c=>c.subs).find(x=>x.id===subId);
-      // update active state within this sub-criterion
-      document.querySelectorAll(`.score-btn[data-sub="${subId}"]`).forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      const indEl = document.getElementById(`ind-${subId}`);
-      indEl.textContent = subDef.indicators[s-1];
-      indEl.classList.add('show');
-      updateGauge();
-    });
+    btn.addEventListener('click', () => setScore(btn.dataset.sub, parseInt(btn.dataset.s, 10), 'manual'));
   });
 }
 
@@ -322,7 +427,8 @@ function updateGauge(){
   const gauge = document.getElementById('gauge');
   const gaugeClass = document.getElementById('gaugeClass');
   const gaugeProgress = document.getElementById('gaugeProgress');
-  gaugeProgress.textContent = `${scored.length} / 11 sub-criteria scored`;
+  const fromImage = scored.filter(id => scoreSources[id] === 'image').length;
+  gaugeProgress.textContent = `${scored.length} / 11 sub-criteria scored` + (fromImage ? ` · ${fromImage} from image` : '');
 
   if(scored.length === 0){
     gauge.textContent = '—';
@@ -351,11 +457,10 @@ function tryAutoFillLocation(){
   const status = document.getElementById('gpsStatus');
   if(!plotId){ status.textContent = 'Enter a Plot ID above to look up its location'; return; }
 
-  // local PhytoScout log first (fast, works offline)
+  // local PhytoScout log
   let entry = null;
   try{
-    const key = getTeamScopedStorageKey('ecoplotscribeLog');
-    const log = JSON.parse(localStorage.getItem(key)) || [];
+    const log = JSON.parse(localStorage.getItem('ecoplotscribeLog')) || [];
     entry = log.slice().reverse().find(e => e.plotId === plotId && e.lat && e.lng);
   }catch(e){}
 
@@ -363,24 +468,8 @@ function tryAutoFillLocation(){
     document.getElementById('lat').value = entry.lat;
     document.getElementById('lng').value = entry.lng;
     status.textContent = '📍 Location matched from PhytoScout (this device)';
-    return;
-  }
-
-  // fall back to the shared database if signed in
-  if(typeof fbDb !== 'undefined' && teamSignedIn){
-    status.textContent = 'Checking shared database…';
-    fbDb.ref('ecoplotscribe/' + plotId).once('value').then(snap => {
-      const remote = snap.val();
-      if(remote && remote.lat && remote.lng){
-        document.getElementById('lat').value = remote.lat;
-        document.getElementById('lng').value = remote.lng;
-        status.textContent = '📍 Location matched from PhytoScout (shared database)';
-      } else {
-        status.textContent = 'No matching PhytoScout record found — enter coordinates manually below';
-      }
-    });
   } else {
-    status.textContent = 'No matching PhytoScout record on this device — enter coordinates manually below, or sign in to check the shared database';
+    status.textContent = 'No matching PhytoScout record on this device — enter coordinates manually below';
   }
 }
 document.getElementById('plotId').addEventListener('blur', tryAutoFillLocation);
@@ -388,10 +477,9 @@ document.getElementById('plotId').addEventListener('blur', tryAutoFillLocation);
 // ---- Storage ----
 const STORAGE_KEY = 'habitatScorerLog';
 function getLog(){
-  const key = getTeamScopedStorageKey(STORAGE_KEY);
-  try{ return JSON.parse(localStorage.getItem(key)) || []; }catch(e){ return []; }
+  try{ return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; }catch(e){ return []; }
 }
-function setLog(log){ localStorage.setItem(getTeamScopedStorageKey(STORAGE_KEY), JSON.stringify(log)); }
+function setLog(log){ localStorage.setItem(STORAGE_KEY, JSON.stringify(log)); }
 function escapeHtml(value){
   return String(value ?? '').replace(/[&<>"']/g, ch => ({
     '&': '&amp;',
@@ -413,7 +501,7 @@ function renderLog(){
   list.innerHTML = log.slice().reverse().map(entry => `
     <div class="logged-item">
       <div>
-        <div class="logged-plot">${escapeHtml(entry.plotId || '(no ID)')} — ${Number(entry.meanScore || 0).toFixed(2)} <span class="helptext">${entry.synced ? '☁️ synced' : '⏳ pending sync'}</span></div>
+        <div class="logged-plot">${escapeHtml(entry.plotId || '(no ID)')} — ${Number(entry.meanScore || 0).toFixed(2)}</div>
         <div class="logged-meta">${escapeHtml(entry.classification || '')} · ${escapeHtml(entry.lga || '')} · ${escapeHtml(entry.date || '')}</div>
       </div>
     </div>
@@ -451,6 +539,9 @@ document.getElementById('saveBtn').addEventListener('click', () => {
     meanScore: Math.round(mean*100)/100,
     classification: mean <= 2.4 ? 'Pristine/near-natural' : 'Degraded',
     complete: scored.length === 11,
+    inputMode: typeof getInputMode === 'function' ? getInputMode() : 'manual',
+    scoreSources: {...scoreSources},
+    imageSummary: typeof getImageSummary === 'function' ? getImageSummary() : null,
     savedAt: new Date().toISOString()
   };
   const log = getLog();
@@ -458,35 +549,19 @@ document.getElementById('saveBtn').addEventListener('click', () => {
   setLog(log);
   renderLog();
   showToast('Plot score saved');
-  syncPlotToFirebase(entry);
 });
-
-let teamSignedIn = false;
-function syncPlotToFirebase(entry){
-  if(typeof fbDb === 'undefined' || !teamSignedIn){ return; } // stays local-only until signed in
-  const teamPath = getTeamScopedDbPath('habitatScorer');
-  fbDb.ref(teamPath + '/' + entry.plotId).set(entry)
-    .then(() => markSyncStatus(entry.plotId, true))
-    .catch(() => markSyncStatus(entry.plotId, false));
-}
-function markSyncStatus(plotId, ok){
-  const log = getLog();
-  const idx = log.findIndex(e => e.plotId === plotId);
-  if(idx >= 0){ log[idx].synced = ok; setLog(log); renderLog(); }
-}
-function retryPendingSyncs(){
-  if(!teamSignedIn) return;
-  getLog().filter(e => !e.synced).forEach(syncPlotToFirebase);
-}
-window.addEventListener('online', retryPendingSyncs);
 
 document.getElementById('resetFormBtn').addEventListener('click', () => {
   scores = {};
+  scoreSources = {};
+  document.querySelectorAll('.src-tag').forEach(el => el.textContent = '');
+  document.dispatchEvent(new CustomEvent('formreset'));
   ['plotId','lga','recorder','fdate','lat','lng'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('gpsStatus').textContent = 'Enter a Plot ID above to look up its location';
   document.querySelectorAll('.score-btn').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.indicator-text').forEach(el => { el.classList.remove('show'); el.textContent=''; });
   updateGauge();
+  document.dispatchEvent(new CustomEvent('scorechange'));
 });
 
 document.getElementById('exportJson').addEventListener('click', () => {
@@ -500,11 +575,12 @@ document.getElementById('exportCsv').addEventListener('click', () => {
   const log = getLog();
   if(log.length === 0){ showToast('No data to export'); return; }
   const subIds = ALL_SUB_IDS;
-  const header = ['plotId','lga','recorder','date','lat','lng', ...subIds, 'subCount','meanScore','classification','complete','savedAt'];
+  const header = ['plotId','lga','recorder','date','lat','lng', ...subIds, 'subCount','meanScore','classification','complete','inputMode','scoreSources','savedAt'];
   const rows = log.map(e => [
     e.plotId, e.lga, e.recorder, e.date, e.lat, e.lng,
     ...subIds.map(id => (e.subScores && e.subScores[id] !== undefined) ? e.subScores[id] : ''),
-    e.subCount, e.meanScore, e.classification, e.complete, e.savedAt
+    e.subCount, e.meanScore, e.classification, e.complete, e.inputMode || 'manual',
+    Object.entries(e.scoreSources || {}).map(([k,v]) => `${k}:${v}`).join(';'), e.savedAt
   ]);
   const csv = [header.join(','), ...rows.map(r => r.map(csvEscape).join(','))].join('\n');
   const blob = new Blob([csv], {type:'text/csv'});
@@ -527,8 +603,8 @@ function downloadBlob(blob, filename){
 }
 
 document.getElementById('clearAll').addEventListener('click', () => {
-  if(confirm('Clear all logged habitat scores for this team? This cannot be undone.')){
-    localStorage.removeItem(getTeamScopedStorageKey(STORAGE_KEY));
+  if(confirm('Clear all logged habitat scores on this device? This cannot be undone.')){
+    localStorage.removeItem(STORAGE_KEY);
     renderLog();
     showToast('Logged data cleared');
   }
@@ -550,11 +626,8 @@ paintToggle();
 render();
 renderLog();
 document.getElementById('fdate').valueAsDate = new Date();
-initTeamAuth('teamAuthContainer', (signedIn) => {
-  teamSignedIn = signedIn;
-  if(signedIn) setTimeout(retryPendingSyncs, 800);
-});
 </script>
+<script src="image-scoring.js"></script>
 
 </body>
 </html>

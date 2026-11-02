@@ -6,10 +6,7 @@
 <link rel="icon" type="image/png" href="favicon.png">
 <title>PhytoScout — INVASCAPE</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
-<script src="firebase-config.js"></script>
+<script src="storage-migrate.js"></script>
 <link rel="stylesheet" href="theme.css">
 <style>
   .custom-size-row{display:none; gap:10px; margin-top:8px;}
@@ -478,10 +475,9 @@ function updateSummary(){
 // ---- Storage ----
 const STORAGE_KEY = 'ecoplotscribeLog';
 function getLog(){
-  const key = getTeamScopedStorageKey(STORAGE_KEY);
-  try{ return JSON.parse(localStorage.getItem(key)) || []; }catch(e){ return []; }
+  try{ return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; }catch(e){ return []; }
 }
-function setLog(log){ localStorage.setItem(getTeamScopedStorageKey(STORAGE_KEY), JSON.stringify(log)); }
+function setLog(log){ localStorage.setItem(STORAGE_KEY, JSON.stringify(log)); }
 function escapeHtml(value){
   return String(value ?? '').replace(/[&<>"']/g, ch => ({
     '&': '&amp;',
@@ -509,7 +505,7 @@ function renderLog(){
   list.innerHTML = log.slice().reverse().map(e => `
     <div class="logged-item">
       <div>
-        <div class="logged-plot">${escapeHtml(e.plotId || '(no ID)')} — ${escapeHtml(e.totalSpecies)} spp, ${escapeHtml(e.quadratCount)} quadrats <span class="helptext">${e.synced ? '☁️ synced' : '⏳ pending sync'}</span></div>
+        <div class="logged-plot">${escapeHtml(e.plotId || '(no ID)')} — ${escapeHtml(e.totalSpecies)} spp, ${escapeHtml(e.quadratCount)} quadrats</span></div>
         <div class="logged-meta">${escapeHtml(e.zone||'')} / ${escapeHtml(e.role||'')} · ${escapeHtml(e.lga||'')}${escapeHtml(e.state ? ', ' + e.state : '')} · ${e.hasTargetSpecies ? 'target spp present' : 'no target spp'} · ${escapeHtml(e.date||'')}</div>
       </div>
     </div>
@@ -556,26 +552,7 @@ document.getElementById('savePlotBtn').addEventListener('click', () => {
   setLog(log);
   renderLog();
   showToast('Plot saved to today\'s log');
-  syncPlotToFirebase(entry);
 });
-
-function syncPlotToFirebase(entry){
-  if(typeof fbDb === 'undefined'){ return; }
-  const teamPath = getTeamScopedDbPath('ecoplotscribe');
-  fbDb.ref(teamPath + '/' + entry.plotId).set(entry)
-    .then(() => markSyncStatus(entry.plotId, true))
-    .catch(() => markSyncStatus(entry.plotId, false));
-}
-function markSyncStatus(plotId, ok){
-  const log = getLog();
-  const idx = log.findIndex(e => e.plotId === plotId);
-  if(idx >= 0){ log[idx].synced = ok; setLog(log); renderLog(); }
-}
-function retryPendingSyncs(){
-  if(typeof fbDb === 'undefined') return;
-  getLog().filter(e => !e.synced).forEach(syncPlotToFirebase);
-}
-window.addEventListener('online', retryPendingSyncs);
 
 document.getElementById('resetFormBtn').addEventListener('click', () => {
   ['plotId','recorder','institution','lat','lng','locality'].forEach(id => document.getElementById(id).value='');
@@ -649,8 +626,8 @@ function downloadBlob(blob, filename){
 }
 
 document.getElementById('clearAll').addEventListener('click', () => {
-  if(confirm('Clear all logged plots for this team? This cannot be undone.')){
-    localStorage.removeItem(getTeamScopedStorageKey(STORAGE_KEY));
+  if(confirm('Clear all logged plots on this device? This cannot be undone.')){
+    localStorage.removeItem(STORAGE_KEY);
     renderLog();
     showToast('Logged data cleared');
   }
@@ -675,7 +652,6 @@ renderQuadrats();
 updateSummary();
 renderLog();
 addQuadrat();
-setTimeout(retryPendingSyncs, 1200);
 </script>
 
 </body>
