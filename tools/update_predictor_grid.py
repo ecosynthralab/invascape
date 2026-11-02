@@ -36,8 +36,11 @@ def init():
 
 
 def state_grid(name):
-    gaul = ee.FeatureCollection("FAO/GAUL/2015/level1").filter(ee.Filter.eq("ADM0_NAME", "Nigeria"))
-    aoi = gaul.filter(ee.Filter.eq("ADM1_NAME", name)).geometry()
+    gaul = ee.FeatureCollection("FAO/GAUL/2025/level1").filter(ee.Filter.eq("GAUL0_NAME", "Nigeria"))
+    states = gaul.filter(ee.Filter.eq("GAUL1_NAME", name))
+    if states.size().getInfo() != 1:
+        sys.exit(f"Expected exactly one state named {name} in FAO GAUL 2025")
+    aoi = states.geometry()
     work = aoi.buffer(EDGE_BUFFER)
     roads = ee.FeatureCollection(ROADS_ASSET).filterBounds(work)
     dist_road = (
@@ -101,12 +104,12 @@ def wait(tasks, timeout_s=3 * 3600):
 def read_asset(asset_id):
     rows, token = [], None
     while True:
-        params = {"asset_id": asset_id, "pageSize": 5000}
+        params = {"assetId": asset_id, "pageSize": 5000}
         if token:
             params["pageToken"] = token
         page = ee.data.listFeatures(params)
         rows += [f["properties"] for f in page.get("features", [])]
-        token = page.get("nextPageToken")
+        token = page.get("next_page_token")
         if not token:
             return rows
 

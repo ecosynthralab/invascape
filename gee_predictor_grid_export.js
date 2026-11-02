@@ -9,13 +9,13 @@ var CAP_PIXELS = 60;      // cropland distance is capped at CAP_PIXELS * DIST_SC
 var GRID_SPACING = 1000;
 var EDGE_BUFFER = 35000;  // metres of data around each state so distances near borders are right
 
-var gaul = ee.FeatureCollection('FAO/GAUL/2015/level1')
-  .filter(ee.Filter.eq('ADM0_NAME', 'Nigeria'));
+var gaul = ee.FeatureCollection('FAO/GAUL/2025/level1')
+  .filter(ee.Filter.eq('GAUL0_NAME', 'Nigeria'));
 var roads = ee.FeatureCollection('projects/ecosynthralab/assets/SE_Roads');
 var worldcover = ee.ImageCollection('ESA/WorldCover/v200').first();
 
 STATES.forEach(function(name) {
-  var aoi = gaul.filter(ee.Filter.eq('ADM1_NAME', name)).geometry();
+  var aoi = gaul.filter(ee.Filter.eq('GAUL1_NAME', name)).geometry();
   var work = aoi.buffer(EDGE_BUFFER);
 
   // Roads: distance in metres, capped at 50 km.
