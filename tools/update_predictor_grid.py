@@ -63,10 +63,11 @@ def state_grid(name):
     sample_image = dist_road.addBands(dist_cropland).addBands(
         ee.Image.pixelLonLat().rename(["lng", "lat"])
     )
+    # Asset exports need a geometry on every feature, so keep the sample point geometry.
     grid = sample_image.sample(
-        region=aoi, scale=GRID_SPACING, projection="EPSG:4326", geometries=False
+        region=aoi, scale=GRID_SPACING, projection="EPSG:4326", geometries=True
     )
-    return grid.select(COLUMNS, None, False)
+    return grid.select(COLUMNS)
 
 
 def export_state(name):
