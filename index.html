@@ -41,6 +41,15 @@
     color:var(--amber); font-weight:800; font-size:12px; margin-right:8px; flex-shrink:0;
   }
   .step-row{display:flex; align-items:flex-start; margin-bottom:2px;}
+  .funding-content{display:flex; align-items:center; gap:16px;}
+  .funding-logo{width:150px; flex-shrink:0; padding:4px 8px; background:#FFFFFF; border-radius:6px;}
+  .funding-logo img{display:block; width:100%; height:auto;}
+  .funding-details p{margin:0 0 8px;}
+  .funding-details p:last-child{margin-bottom:0;}
+  @media (max-width:480px){
+    .funding-content{align-items:flex-start; flex-direction:column;}
+    .funding-logo{width:130px;}
+  }
 </style>
 </head>
 <body>
@@ -112,12 +121,17 @@
 
   <section class="card" aria-labelledby="funding-title">
     <div class="card-title" id="funding-title">Funding acknowledgment</div>
-    <p>This project is sponsored by the Tertiary Education Trust Fund (TETFund) through the Institution-Based Research (IBR) 2026 program.</p>
-    <p><strong>Reference number:</strong> TETF/ES/DR&amp;D/CE/UNI/AWKA/IBR/2026/VOL.1/42</p>
+    <div class="funding-content">
+      <div class="funding-logo"><img src="tetfund-logo.png" alt="Tertiary Education Trust Fund (TETFund)"></div>
+      <div class="funding-details">
+        <p>This project is sponsored by the Tertiary Education Trust Fund (TETFund) through the Institution-Based Research (IBR) 2026 program.</p>
+        <p><strong>Reference number:</strong> TETF/ES/DR&amp;D/CE/UNI/AWKA/IBR/2026/VOL.1/42</p>
+      </div>
+    </div>
   </section>
 </main>
 
-<footer class="site-footer">Ecosynthra Lab</footer>
+<footer class="site-footer"><img src="ecosynthra-logo.png" alt="Ecosynthra Lab"><span>Ecosynthra Lab 2026</span></footer>
 
 <script>
 function paintToggle(){
