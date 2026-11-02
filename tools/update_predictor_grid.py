@@ -109,7 +109,7 @@ def read_asset(asset_id):
             params["pageToken"] = token
         page = ee.data.listFeatures(params)
         rows += [f["properties"] for f in page.get("features", [])]
-        token = page.get("next_page_token")
+        token = page.get("nextPageToken") or page.get("next_page_token")
         if not token:
             return rows
 
@@ -138,8 +138,10 @@ def main():
     jobs = [export_state(n) for n in STATES]
     wait([t for t, _ in jobs])
     seen = {}
-    for _, asset_id in jobs:
-        for r in read_asset(asset_id):
+    for name, (_, asset_id) in zip(STATES, jobs):
+        state_rows = read_asset(asset_id)
+        print(f"{name}: {len(state_rows)} points", flush=True)
+        for r in state_rows:
             seen[(round(r["lat"], 5), round(r["lng"], 5))] = r
     rows = [seen[k] for k in sorted(seen)]
     validate(rows)
